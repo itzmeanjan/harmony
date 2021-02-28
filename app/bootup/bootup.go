@@ -3,7 +3,7 @@ package bootup
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 )
@@ -17,7 +17,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
-	client, err := ethclient.DialContext(ctx, config.Get("RPCUrl"))
+	client, err := rpc.DialContext(ctx, config.Get("RPCUrl"))
 
 	if err != nil {
 		return nil, err
