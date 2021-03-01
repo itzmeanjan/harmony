@@ -21,6 +21,16 @@ type PendingPool struct {
 	Lock         *sync.RWMutex
 }
 
+// Count - How many tx(s) currently present in pending pool
+func (p *PendingPool) Count() uint64 {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	return uint64(len(p.Transactions))
+
+}
+
 // Add - Attempts to add new tx found in pending pool into
 // harmony mempool, so that further manipulation can be performed on it
 //
@@ -87,10 +97,7 @@ type MemPool struct {
 // PendingPoolLength - Returning current pending tx queue length
 func (m *MemPool) PendingPoolLength() uint64 {
 
-	m.Pending.Lock.RLock()
-	defer m.Pending.Lock.RUnlock()
-
-	return uint64(len(m.Pending.Transactions))
+	return m.PendingPoolLength()
 
 }
 
