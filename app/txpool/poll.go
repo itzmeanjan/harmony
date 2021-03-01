@@ -3,6 +3,7 @@ package txpool
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/itzmeanjan/harmony/app/config"
@@ -21,7 +22,13 @@ func PollTxPoolContent(ctx context.Context, rpc *data.Resource, comm chan struct
 
 		if err := rpc.RPCClient.CallContext(ctx, &result, "txpool_content"); err != nil {
 
-			log.Printf("[!] Failed to fetch mempool content : %s\n", err.Error())
+			log.Printf("[❗️] Failed to fetch mempool content : %s\n", err.Error())
+
+			// If supervisor is asking to stop operation, just get out
+			// of this infinite loop
+			if strings.Contains(err.Error(), "context canceled") {
+				break
+			}
 
 			// Letting supervisor know, pool polling go routine is dying
 			// it must take care of spawning another one to continue functioning
