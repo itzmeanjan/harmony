@@ -140,14 +140,20 @@ func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]
 }
 
 // AddQueued - Update latest queued pool state
-func (q *QueuedPool) AddQueued(txs map[string]map[string]*MemPoolTx) {
+func (q *QueuedPool) AddQueued(txs map[string]map[string]*MemPoolTx) uint64 {
+
+	var count uint64
 
 	for _, vOuter := range txs {
 		for _, vInner := range vOuter {
 
-			q.Add(vInner)
+			if q.Add(vInner) {
+				count++
+			}
 
 		}
 	}
+
+	return count
 
 }

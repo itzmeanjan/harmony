@@ -115,14 +115,20 @@ func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint
 }
 
 // AddPendings - Update latest pending pool state
-func (p *PendingPool) AddPendings(txs map[string]map[string]*MemPoolTx) {
+func (p *PendingPool) AddPendings(txs map[string]map[string]*MemPoolTx) uint64 {
+
+	var count uint64
 
 	for _, vOuter := range txs {
 		for _, vInner := range vOuter {
 
-			p.Add(vInner)
+			if p.Add(vInner) {
+				count++
+			}
 
 		}
 	}
+
+	return count
 
 }
