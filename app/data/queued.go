@@ -68,3 +68,50 @@ func (q *QueuedPool) Remove(txHash common.Hash) bool {
 	return true
 
 }
+
+// RemoveUnstuck - Removes queued tx(s) from pool which have been unstuck
+// & returns how many were removed. If 0 is returned, denotes all tx(s) queued last time
+// are still in queued state
+//
+// Only when their respective blocking factor will get unblocked, they'll be pushed
+// into pending pool
+func (q *QueuedPool) RemoveUnstuck(txs map[string]map[string]*MemPoolTx) uint64 {
+
+	buffer := make([]common.Hash, 0, len(q.Transactions))
+
+	// -- Attempt to safely find out which txHashes
+	// are absent in current mempool content, i.e. denoting
+	// those tx(s) are confirmed & mined in a block
+	//
+	// So we can also remove those from our pending pool
+	q.Lock.RLock()
+
+	for hash := range q.Transactions {
+
+		if !IsPresentInCurrentPool(txs, hash) {
+			buffer = append(buffer, hash)
+		}
+
+	}
+
+	q.Lock.RUnlock()
+	// -- Done with safely reading to be removed tx(s)
+
+	// All pending tx(s) present in last iteration
+	// also present in now
+	//
+	// Nothing has changed, so we can't remove any older tx(s)
+	if len(buffer) == 0 {
+		return 0
+	}
+
+	// Iteratively removing entries which are
+	// not supposed to be present in pending mempool
+	// anymore
+	for _, v := range buffer {
+		q.Remove(v)
+	}
+
+	return uint64(len(buffer))
+
+}
