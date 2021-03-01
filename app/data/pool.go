@@ -6,17 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// MemPool - Current state of mempool, where all pending/ queued tx(s)
-// are present. Among these pending tx(s), any of them can be picked up during next
-// block mining phase, but any tx(s) present in queued pool, can't be picked up
-// until some problem with sender address is resolved.
-//
-// Tx(s) ending up in queued pool, happens very commonly due to account nonce gaps
-type MemPool struct {
-	Pending *PendingPool
-	Queued  *QueuedPool
-}
-
 // TxIdentifier - Helps in identifying single tx uniquely using
 // tx sender address & nonce
 type TxIdentifier struct {
@@ -42,4 +31,35 @@ type QueuedPool struct {
 	Transactions map[common.Hash]*MemPoolTx
 	Addresses    map[*TxIdentifier]common.Hash
 	Lock         *sync.RWMutex
+}
+
+// MemPool - Current state of mempool, where all pending/ queued tx(s)
+// are present. Among these pending tx(s), any of them can be picked up during next
+// block mining phase, but any tx(s) present in queued pool, can't be picked up
+// until some problem with sender address is resolved.
+//
+// Tx(s) ending up in queued pool, happens very commonly due to account nonce gaps
+type MemPool struct {
+	Pending *PendingPool
+	Queued  *QueuedPool
+}
+
+// PendingPoolLength - Returning current pending tx queue length
+func (m *MemPool) PendingPoolLength() uint64 {
+
+	m.Pending.Lock.RLock()
+	defer m.Pending.Lock.RUnlock()
+
+	return uint64(len(m.Pending.Transactions))
+
+}
+
+// QueuedPoolLength - Returning current queued tx queue length
+func (m *MemPool) QueuedPoolLength() uint64 {
+
+	m.Queued.Lock.RLock()
+	defer m.Queued.Lock.RUnlock()
+
+	return uint64(len(m.Queued.Transactions))
+
 }
