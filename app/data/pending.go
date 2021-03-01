@@ -39,7 +39,7 @@ func (p *PendingPool) Add(tx *MemPoolTx) bool {
 	}
 
 	// Marking we found this tx in mempool now
-	tx.DiscoveredAt = time.Now().UTC()
+	tx.PendingFrom = time.Now().UTC()
 
 	// Creating entry
 	p.Transactions[tx.Hash] = tx
