@@ -64,3 +64,65 @@ func (p *PendingPool) Remove(txHash common.Hash) bool {
 	return true
 
 }
+
+// RemoveConfirmed - Removes pending tx(s) from pool which have been confirmed
+// & returns how many were removed. If 0 is returned, denotes all tx(s) pending last time
+// are still in pending state
+func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint64 {
+
+	// -- Attempt to safely find out which txHashes
+	// are absent in current mempool content, i.e. denoting
+	// those tx(s) are confirmed & mined in a block
+	//
+	// So we can also remove those from our pending pool
+	p.Lock.RLock()
+
+	buffer := make([]common.Hash, 0, len(p.Transactions))
+
+	for hash := range p.Transactions {
+
+		var present bool
+
+		{
+		OUTER:
+			for _, vOuter := range txs {
+				for _, vInner := range vOuter {
+
+					if vInner.Hash == hash {
+
+						present = true
+						break OUTER
+
+					}
+
+				}
+			}
+		}
+
+		if !present {
+			buffer = append(buffer, hash)
+		}
+
+	}
+
+	p.Lock.RUnlock()
+	// -- Done with safely reading to be removed tx(s)
+
+	// All pending tx(s) present in last iteration
+	// also present in now
+	//
+	// Nothing has changed, so we can't remove any older tx(s)
+	if len(buffer) == 0 {
+		return 0
+	}
+
+	// Iteratively removing entries which are
+	// not supposed to be present in pending mempool
+	// anymore
+	for _, v := range buffer {
+		p.Remove(v)
+	}
+
+	return uint64(len(buffer))
+
+}
