@@ -2,6 +2,7 @@ package data
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -19,6 +20,35 @@ type PendingPool struct {
 	Transactions map[common.Hash]*MemPoolTx
 	Addresses    map[*TxIdentifier]common.Hash
 	Lock         *sync.RWMutex
+}
+
+// Add - Attempts to add new tx found in pending pool into
+// harmony mempool, so that further manipulation can be performed on it
+//
+// If it returns `true`, it denotes, it's success, otherwise it's failure
+// because this tx is already present in pending pool
+func (p *PendingPool) Add(tx *MemPoolTx) bool {
+
+	p.Lock.Lock()
+	defer p.Lock.Unlock()
+
+	if _, ok := p.Transactions[tx.Hash]; ok {
+		return false
+	}
+
+	// Marking we found this tx in mempool now
+	tx.DiscoveredAt = time.Now().UTC()
+
+	// -- Creating entry
+	p.Transactions[tx.Hash] = tx
+	p.Addresses[&TxIdentifier{
+		Sender: tx.From,
+		Nonce:  uint64(tx.Nonce),
+	}] = tx.Hash
+	// -- done with creating entry
+
+	return true
+
 }
 
 // QueuedPool - Currently present queued tx(s) i.e. these tx(s) are stuck
