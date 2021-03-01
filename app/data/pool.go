@@ -27,19 +27,19 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 func (m *MemPool) Process(pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
 	if v := m.Queued.RemoveUnstuck(m.Pending, pending, queued); v != 0 {
-		log.Printf("[🆗] Removed %d unstuck tx(s) from queued tx pool\n", v)
+		log.Printf("🆗 Removed %d unstuck tx(s) from queued tx pool\n", v)
 	}
 
 	if v := m.Queued.AddQueued(queued); v != 0 {
-		log.Printf("[☑️] Added %d tx(s) into queued tx pool\n", v)
+		log.Printf("☑️ Added %d tx(s) into queued tx pool\n", v)
 	}
 
 	if v := m.Pending.RemoveConfirmed(pending); v != 0 {
-		log.Printf("[🆗] Removed %d confirmed tx(s) from pending tx pool\n", v)
+		log.Printf("🆗 Removed %d confirmed tx(s) from pending tx pool\n", v)
 	}
 
 	if v := m.Pending.AddPendings(pending); v != 0 {
-		log.Printf("[☑️] Added %d tx(s) into pending tx pool\n", v)
+		log.Printf("☑️ Added %d tx(s) into pending tx pool\n", v)
 	}
 
 }
@@ -47,6 +47,6 @@ func (m *MemPool) Process(pending map[string]map[string]*MemPoolTx, queued map[s
 // Stat - Log current mempool state
 func (m *MemPool) Stat() {
 
-	log.Printf("[❇️] Pending Tx(s) : %d | Queued Tx(s) : %d\n", m.PendingPoolLength(), m.QueuedPoolLength())
+	log.Printf("❇️ Pending Tx(s) : %d | Queued Tx(s) : %d\n", m.PendingPoolLength(), m.QueuedPoolLength())
 
 }
