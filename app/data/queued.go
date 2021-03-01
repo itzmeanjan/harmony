@@ -1,6 +1,7 @@
 package data
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -54,18 +55,19 @@ func (q *QueuedPool) Add(tx *MemPoolTx) bool {
 
 // Remove - Removes already existing tx from pending tx pool
 // denoting it has been mined i.e. confirmed
-func (q *QueuedPool) Remove(txHash common.Hash) bool {
+func (q *QueuedPool) Remove(txHash common.Hash) *MemPoolTx {
 
 	q.Lock.Lock()
 	defer q.Lock.Unlock()
 
-	if _, ok := q.Transactions[txHash]; !ok {
-		return false
+	tx, ok := q.Transactions[txHash]
+	if !ok {
+		return nil
 	}
 
 	delete(q.Transactions, txHash)
 
-	return true
+	return tx
 
 }
 
@@ -75,20 +77,22 @@ func (q *QueuedPool) Remove(txHash common.Hash) bool {
 //
 // Only when their respective blocking factor will get unblocked, they'll be pushed
 // into pending pool
-func (q *QueuedPool) RemoveUnstuck(txs map[string]map[string]*MemPoolTx) uint64 {
+func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
 
 	buffer := make([]common.Hash, 0, len(q.Transactions))
 
 	// -- Attempt to safely find out which txHashes
 	// are absent in current mempool content, i.e. denoting
-	// those tx(s) are confirmed & mined in a block
+	// those tx(s) are unstuck & can be attempted to be mined
+	// in next block
 	//
-	// So we can also remove those from our pending pool
+	// So we can also remove those from our queued pool & consider
+	// putting them in pending pool
 	q.Lock.RLock()
 
 	for hash := range q.Transactions {
 
-		if !IsPresentInCurrentPool(txs, hash) {
+		if !IsPresentInCurrentPool(queued, hash) {
 			buffer = append(buffer, hash)
 		}
 
@@ -97,7 +101,7 @@ func (q *QueuedPool) RemoveUnstuck(txs map[string]map[string]*MemPoolTx) uint64 
 	q.Lock.RUnlock()
 	// -- Done with safely reading to be removed tx(s)
 
-	// All pending tx(s) present in last iteration
+	// All queued tx(s) present in last iteration
 	// also present in now
 	//
 	// Nothing has changed, so we can't remove any older tx(s)
@@ -106,10 +110,29 @@ func (q *QueuedPool) RemoveUnstuck(txs map[string]map[string]*MemPoolTx) uint64 
 	}
 
 	// Iteratively removing entries which are
-	// not supposed to be present in pending mempool
+	// not supposed to be present in queued mempool
 	// anymore
+	//
+	// And attempting to add them to pending pool
+	// if they're supposed to be added there
 	for _, v := range buffer {
-		q.Remove(v)
+
+		// removing unstuck tx
+		tx := q.Remove(v)
+		if tx == nil {
+			continue
+		}
+
+		// If this tx is present in current pending pool
+		// content, it'll be pushed into mempool
+		if !IsPresentInCurrentPool(pending, v) {
+			continue
+		}
+
+		if !pendingPool.Add(tx) {
+			log.Printf("[❗️] Failed to push unstuck tx into pending pool\n")
+		}
+
 	}
 
 	return uint64(len(buffer))

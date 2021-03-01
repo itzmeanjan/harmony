@@ -1,6 +1,7 @@
 package data
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -102,7 +103,11 @@ func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint
 	// not supposed to be present in pending mempool
 	// anymore
 	for _, v := range buffer {
-		p.Remove(v)
+
+		if !p.Remove(v) {
+			log.Printf("[❗️] Failed to remove confirmed tx from pending pool\n")
+		}
+
 	}
 
 	return uint64(len(buffer))
