@@ -65,10 +65,38 @@ func (p *PendingPool) Remove(txHash common.Hash) bool {
 
 }
 
+// IsPresentInCurrentPendingPool - Given tx hash, which was previously present in pending pool
+// attempts to check whether it's present in current txpool content or not
+func IsPresentInCurrentPendingPool(txs map[string]map[string]*MemPoolTx, txHash common.Hash) bool {
+
+	var present bool
+
+	{
+	OUTER:
+		for _, vOuter := range txs {
+			for _, vInner := range vOuter {
+
+				if vInner.Hash == txHash {
+
+					present = true
+					break OUTER
+
+				}
+
+			}
+		}
+	}
+
+	return present
+
+}
+
 // RemoveConfirmed - Removes pending tx(s) from pool which have been confirmed
 // & returns how many were removed. If 0 is returned, denotes all tx(s) pending last time
 // are still in pending state
 func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint64 {
+
+	buffer := make([]common.Hash, 0, len(p.Transactions))
 
 	// -- Attempt to safely find out which txHashes
 	// are absent in current mempool content, i.e. denoting
@@ -77,29 +105,9 @@ func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint
 	// So we can also remove those from our pending pool
 	p.Lock.RLock()
 
-	buffer := make([]common.Hash, 0, len(p.Transactions))
-
 	for hash := range p.Transactions {
 
-		var present bool
-
-		{
-		OUTER:
-			for _, vOuter := range txs {
-				for _, vInner := range vOuter {
-
-					if vInner.Hash == hash {
-
-						present = true
-						break OUTER
-
-					}
-
-				}
-			}
-		}
-
-		if !present {
+		if !IsPresentInCurrentPendingPool(txs, hash) {
 			buffer = append(buffer, hash)
 		}
 
