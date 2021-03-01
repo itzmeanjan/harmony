@@ -18,7 +18,6 @@ type TxIdentifier struct {
 // be mined in next block
 type PendingPool struct {
 	Transactions map[common.Hash]*MemPoolTx
-	Addresses    map[*TxIdentifier]common.Hash
 	Lock         *sync.RWMutex
 }
 
@@ -39,13 +38,25 @@ func (p *PendingPool) Add(tx *MemPoolTx) bool {
 	// Marking we found this tx in mempool now
 	tx.DiscoveredAt = time.Now().UTC()
 
-	// -- Creating entry
+	// Creating entry
 	p.Transactions[tx.Hash] = tx
-	p.Addresses[&TxIdentifier{
-		Sender: tx.From,
-		Nonce:  uint64(tx.Nonce),
-	}] = tx.Hash
-	// -- done with creating entry
+
+	return true
+
+}
+
+// Remove - Removes already existing tx from pending tx pool
+// denoting it has been mined i.e. confirmed
+func (p *PendingPool) Remove(txHash common.Hash) bool {
+
+	p.Lock.Lock()
+	defer p.Lock.Unlock()
+
+	if _, ok := p.Transactions[txHash]; !ok {
+		return false
+	}
+
+	delete(p.Transactions, txHash)
 
 	return true
 
@@ -59,7 +70,6 @@ func (p *PendingPool) Add(tx *MemPoolTx) bool {
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
 	Transactions map[common.Hash]*MemPoolTx
-	Addresses    map[*TxIdentifier]common.Hash
 	Lock         *sync.RWMutex
 }
 
