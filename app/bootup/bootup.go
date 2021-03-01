@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // SetGround - This is to be called when starting application
@@ -30,12 +30,10 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		Pool: &data.MemPool{
 			Pending: &data.PendingPool{
 				Transactions: make(map[common.Hash]*data.MemPoolTx),
-				Addresses:    make(map[*data.TxIdentifier]common.Hash),
 				Lock:         &sync.RWMutex{},
 			},
 			Queued: &data.QueuedPool{
 				Transactions: make(map[common.Hash]*data.MemPoolTx),
-				Addresses:    make(map[*data.TxIdentifier]common.Hash),
 				Lock:         &sync.RWMutex{},
 			},
 		}}, nil
