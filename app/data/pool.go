@@ -13,10 +13,8 @@ import (
 //
 // Tx(s) ending up in queued pool, happens very commonly due to account nonce gaps
 type MemPool struct {
-	Pending         *PendingPool
-	PendingPoolLock *sync.RWMutex
-	QueuedPool      *QueuedPool
-	QueuedPoolLock  *sync.RWMutex
+	Pending *PendingPool
+	Queued  *QueuedPool
 }
 
 // TxIdentifier - Helps in identifying single tx uniquely using
@@ -31,6 +29,7 @@ type TxIdentifier struct {
 type PendingPool struct {
 	Transactions map[common.Hash]*MemPoolTx
 	Addresses    map[*TxIdentifier]common.Hash
+	Lock         *sync.RWMutex
 }
 
 // QueuedPool - Currently present queued tx(s) i.e. these tx(s) are stuck
@@ -42,4 +41,5 @@ type PendingPool struct {
 type QueuedPool struct {
 	Transactions map[common.Hash]*MemPoolTx
 	Addresses    map[*TxIdentifier]common.Hash
+	Lock         *sync.RWMutex
 }
