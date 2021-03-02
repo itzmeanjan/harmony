@@ -18,6 +18,9 @@ func PollTxPoolContent(ctx context.Context, rpc *data.Resource, comm chan struct
 
 	for {
 
+		// Starting to fetch latest state of mempool
+		start := time.Now().UTC()
+
 		var result map[string]map[string]map[string]*data.MemPoolTx
 
 		if err := rpc.RPCClient.CallContext(ctx, &result, "txpool_content"); err != nil {
@@ -39,7 +42,7 @@ func PollTxPoolContent(ctx context.Context, rpc *data.Resource, comm chan struct
 
 		// Process current tx pool content
 		rpc.Pool.Process(ctx, rpc.Redis, result["pending"], result["queued"])
-		rpc.Pool.Stat()
+		rpc.Pool.Stat(start)
 
 		// Sleep for desired amount of time & get to work again
 		<-time.After(time.Duration(config.GetMemPoolPollingPeriod()) * time.Millisecond)

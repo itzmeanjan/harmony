@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -50,8 +51,8 @@ func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map
 }
 
 // Stat - Log current mempool state
-func (m *MemPool) Stat() {
+func (m *MemPool) Stat(start time.Time) {
 
-	log.Printf("❇️ Pending Tx(s) : %d | Queued Tx(s) : %d\n", m.PendingPoolLength(), m.QueuedPoolLength())
+	log.Printf("❇️ Pending Tx(s) : %d | Queued Tx(s) : %d, in %s\n", m.PendingPoolLength(), m.QueuedPoolLength(), time.Now().UTC().Sub(start))
 
 }
