@@ -51,36 +51,34 @@ func (p *PendingPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPool
 
 	// After adding new tx in pending pool, also attempt to
 	// publish it to pubsub topic
-	return p.PublishAdded(ctx, pubsub, tx)
+	p.PublishAdded(ctx, pubsub, tx)
+	return true
 
 }
 
 // PublishAdded - Publish new pending tx pool content ( in messagepack serialized format )
 // to pubsub topic
-func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) bool {
+func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
 
 	_msg, err := msg.ToMessagePack()
 	if err != nil {
 
 		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
-		return false
+		return
 
 	}
 
 	if err := pubsub.Publish(ctx, config.GetPendingTxEntryPublishTopic(), _msg).Err(); err != nil {
 
 		log.Printf("[❗️] Failed to publish new pending tx : %s\n", err.Error())
-		return false
 
 	}
-
-	return true
 
 }
 
 // Remove - Removes already existing tx from pending tx pool
 // denoting it has been mined i.e. confirmed
-func (p *PendingPool) Remove(txHash common.Hash) bool {
+func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txHash common.Hash) bool {
 
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
@@ -89,16 +87,41 @@ func (p *PendingPool) Remove(txHash common.Hash) bool {
 		return false
 	}
 
+	// Publishing this confirmed tx
+	p.PublishRemoved(ctx, pubsub, p.Transactions[txHash])
+
 	delete(p.Transactions, txHash)
 
 	return true
 
 }
 
+// PublishRemoved - Publish old pending tx pool content ( in messagepack serialized format )
+// to pubsub topic
+//
+// These tx(s) are leaving pending pool i.e. they're confirmed now
+func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
+
+	_msg, err := msg.ToMessagePack()
+	if err != nil {
+
+		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
+		return
+
+	}
+
+	if err := pubsub.Publish(ctx, config.GetPendingTxExitPublishTopic(), _msg).Err(); err != nil {
+
+		log.Printf("[❗️] Failed to publish confirmed tx : %s\n", err.Error())
+
+	}
+
+}
+
 // RemoveConfirmed - Removes pending tx(s) from pool which have been confirmed
 // & returns how many were removed. If 0 is returned, denotes all tx(s) pending last time
 // are still in pending state
-func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) RemoveConfirmed(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	buffer := make([]common.Hash, 0, len(p.Transactions))
 
@@ -135,7 +158,7 @@ func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint
 	// anymore
 	for _, v := range buffer {
 
-		if !p.Remove(v) {
+		if !p.Remove(ctx, pubsub, v) {
 			log.Printf("[❗️] Failed to remove confirmed tx from pending pool\n")
 			continue
 		}
