@@ -33,7 +33,7 @@ func (p *PendingPool) Count() uint64 {
 //
 // If it returns `true`, it denotes, it's success, otherwise it's failure
 // because this tx is already present in pending pool
-func (p *PendingPool) Add(ctx context.Context, tx *MemPoolTx) bool {
+func (p *PendingPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
 
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
@@ -49,7 +49,9 @@ func (p *PendingPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 	// Creating entry
 	p.Transactions[tx.Hash] = tx
 
-	return true
+	// After adding new tx in pending pool, also attempt to
+	// publish it to pubsub topic
+	return p.PublishAdded(ctx, pubsub, tx)
 
 }
 
@@ -147,14 +149,14 @@ func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint
 }
 
 // AddPendings - Update latest pending pool state
-func (p *PendingPool) AddPendings(txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	var count uint64
 
 	for _, vOuter := range txs {
 		for _, vInner := range vOuter {
 
-			if p.Add(vInner) {
+			if p.Add(ctx, pubsub, vInner) {
 				count++
 			}
 
