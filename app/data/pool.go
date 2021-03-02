@@ -36,7 +36,7 @@ func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map
 	}
 
 	if v := m.Queued.AddQueued(ctx, pubsub, queued); v != 0 {
-		log.Printf("☑️ Added %d tx(s) into queued tx pool\n", v)
+		log.Printf("☑️ Added %d tx(s) to queued tx pool\n", v)
 	}
 
 	if v := m.Pending.RemoveConfirmed(ctx, pubsub, pending); v != 0 {
@@ -44,7 +44,7 @@ func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map
 	}
 
 	if v := m.Pending.AddPendings(ctx, pubsub, pending); v != 0 {
-		log.Printf("☑️ Added %d tx(s) into pending tx pool\n", v)
+		log.Printf("☑️ Added %d tx(s) to pending tx pool\n", v)
 	}
 
 }
