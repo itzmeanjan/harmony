@@ -43,29 +43,55 @@ func GetMemPoolPollingPeriod() uint64 {
 
 }
 
-// GetPendingTxPublishTopic - Read provided topic name from `.env` file
+// GetPendingTxEntryPublishTopic - Read provided topic name from `.env` file
 // where newly added pending pool tx(s) to be published
-func GetPendingTxPublishTopic() string {
+func GetPendingTxEntryPublishTopic() string {
 
-	if v := Get("PendingTxTopic"); len(v) != 0 {
+	if v := Get("PendingTxEntryTopic"); len(v) != 0 {
 		return v
 	}
 
-	log.Printf("[❗️] Failed to get topic for publishing pending tx, using `pending_pool`\n")
-	return "pending_pool"
+	log.Printf("[❗️] Failed to get topic for publishing new pending tx, using `pending_pool_entry`\n")
+	return "pending_pool_entry"
 
 }
 
-// GetQueuedTxPublishTopic - Read provided topic name from `.env` file
-// where newly added queued pool tx(s) to be published
-func GetQueuedTxPublishTopic() string {
+// GetPendingTxExitPublishTopic - Read provided topic name from `.env` file
+// where tx(s) removed from pending pool to be published
+func GetPendingTxExitPublishTopic() string {
 
-	if v := Get("QueuedTxTopic"); len(v) != 0 {
+	if v := Get("PendingTxExitTopic"); len(v) != 0 {
 		return v
 	}
 
-	log.Printf("[❗️] Failed to get topic for publishing queued tx, using `queued_pool`\n")
-	return "queued_pool"
+	log.Printf("[❗️] Failed to get topic for publishing tx removed from pending pool, using `pending_pool_exit`\n")
+	return "pending_pool_exit"
+
+}
+
+// GetQueuedTxEntryPublishTopic - Read provided topic name from `.env` file
+// where newly added queued pool tx(s) to be published
+func GetQueuedTxEntryPublishTopic() string {
+
+	if v := Get("QueuedTxEntryTopic"); len(v) != 0 {
+		return v
+	}
+
+	log.Printf("[❗️] Failed to get topic for publishing new queued tx, using `queued_pool_entry`\n")
+	return "queued_pool_entry"
+
+}
+
+// GetQueuedTxExitPublishTopic - Read provided topic name from `.env` file
+// where tx(s) removed from queued pool to be published
+func GetQueuedTxExitPublishTopic() string {
+
+	if v := Get("QueuedTxExitTopic"); len(v) != 0 {
+		return v
+	}
+
+	log.Printf("[❗️] Failed to get topic for publishing tx removed from queued pool, using `queued_pool_exit`\n")
+	return "queued_pool_exit"
 
 }
 
