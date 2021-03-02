@@ -1,11 +1,14 @@
 package data
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/go-redis/redis/v8"
+	"github.com/itzmeanjan/harmony/app/config"
 )
 
 // QueuedPool - Currently present queued tx(s) i.e. these tx(s) are stuck
@@ -34,7 +37,7 @@ func (q *QueuedPool) Count() uint64 {
 //
 // If it returns `true`, it denotes, it's success, otherwise it's failure
 // because this tx is already present in pending pool
-func (q *QueuedPool) Add(tx *MemPoolTx) bool {
+func (q *QueuedPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
 
 	q.Lock.Lock()
 	defer q.Lock.Unlock()
@@ -50,7 +53,30 @@ func (q *QueuedPool) Add(tx *MemPoolTx) bool {
 	// Creating entry
 	q.Transactions[tx.Hash] = tx
 
+	// As soon as we find new entry for queued pool
+	// we publish that tx to pubsub topic
+	q.PublishAdded(ctx, pubsub, tx)
 	return true
+
+}
+
+// PublishAdded - Publish new tx, entered queued pool, ( in messagepack serialized format )
+// to pubsub topic
+func (q *QueuedPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
+
+	_msg, err := msg.ToMessagePack()
+	if err != nil {
+
+		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
+		return
+
+	}
+
+	if err := pubsub.Publish(ctx, config.GetQueuedTxEntryPublishTopic(), _msg).Err(); err != nil {
+
+		log.Printf("[❗️] Failed to publish new queued tx : %s\n", err.Error())
+
+	}
 
 }
 
@@ -148,14 +174,14 @@ func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]
 }
 
 // AddQueued - Update latest queued pool state
-func (q *QueuedPool) AddQueued(txs map[string]map[string]*MemPoolTx) uint64 {
+func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	var count uint64
 
 	for _, vOuter := range txs {
 		for _, vInner := range vOuter {
 
-			if q.Add(vInner) {
+			if q.Add(ctx, pubsub, vInner) {
 				count++
 			}
 
