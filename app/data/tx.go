@@ -29,4 +29,5 @@ type MemPoolTx struct {
 	S                *hexutil.Big    `json:"s"`
 	PendingFrom      time.Time
 	QueuedAt         time.Time
+	Pool             string
 }

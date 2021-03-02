@@ -45,6 +45,7 @@ func (q *QueuedPool) Add(tx *MemPoolTx) bool {
 
 	// Marking we found this tx in mempool now
 	tx.QueuedAt = time.Now().UTC()
+	tx.Pool = "queued"
 
 	// Creating entry
 	q.Transactions[tx.Hash] = tx
