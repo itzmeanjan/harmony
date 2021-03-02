@@ -82,7 +82,7 @@ func (q *QueuedPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg
 
 // Remove - Removes already existing tx from pending tx pool
 // denoting it has been mined i.e. confirmed
-func (q *QueuedPool) Remove(txHash common.Hash) *MemPoolTx {
+func (q *QueuedPool) Remove(ctx context.Context, pubsub *redis.Client, txHash common.Hash) *MemPoolTx {
 
 	q.Lock.Lock()
 	defer q.Lock.Unlock()
@@ -92,9 +92,37 @@ func (q *QueuedPool) Remove(txHash common.Hash) *MemPoolTx {
 		return nil
 	}
 
+	// Publishing unstuck tx, this is probably going to
+	// enter pending pool now
+	q.PublishRemoved(ctx, pubsub, q.Transactions[txHash])
+
 	delete(q.Transactions, txHash)
 
 	return tx
+
+}
+
+// PublishRemoved - Publish unstuck tx, leaving queued pool ( in messagepack serialized format )
+// to pubsub topic
+//
+// These tx(s) are leaving queued pool i.e. they're ( probably ) going to
+// sit in pending pool now, unless they're already mined & harmony
+// failed to keep track of it
+func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
+
+	_msg, err := msg.ToMessagePack()
+	if err != nil {
+
+		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
+		return
+
+	}
+
+	if err := pubsub.Publish(ctx, config.GetQueuedTxExitPublishTopic(), _msg).Err(); err != nil {
+
+		log.Printf("[❗️] Failed to publish unstuck tx : %s\n", err.Error())
+
+	}
 
 }
 
@@ -104,7 +132,7 @@ func (q *QueuedPool) Remove(txHash common.Hash) *MemPoolTx {
 //
 // Only when their respective blocking factor will get unblocked, they'll be pushed
 // into pending pool
-func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
+func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pubsub *redis.Client, pendingPool *PendingPool, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
 
 	buffer := make([]common.Hash, 0, len(q.Transactions))
 
@@ -147,7 +175,7 @@ func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]
 	for _, v := range buffer {
 
 		// removing unstuck tx
-		tx := q.Remove(v)
+		tx := q.Remove(ctx, pubsub, v)
 		if tx == nil {
 			log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
 			continue
@@ -163,7 +191,7 @@ func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]
 			continue
 		}
 
-		if !pendingPool.Add(tx) {
+		if !pendingPool.Add(ctx, pubsub, tx) {
 			log.Printf("[❗️] Failed to push unstuck tx into pending pool\n")
 		}
 
