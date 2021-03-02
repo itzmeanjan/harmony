@@ -38,7 +38,7 @@ func PollTxPoolContent(ctx context.Context, rpc *data.Resource, comm chan struct
 		}
 
 		// Process current tx pool content
-		rpc.Pool.Process(result["pending"], result["queued"])
+		rpc.Pool.Process(ctx, rpc.Redis, result["pending"], result["queued"])
 		rpc.Pool.Stat()
 
 		// Sleep for desired amount of time & get to work again

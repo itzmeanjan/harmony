@@ -1,6 +1,11 @@
 package data
 
-import "log"
+import (
+	"context"
+	"log"
+
+	"github.com/go-redis/redis/v8"
+)
 
 // MemPool - Current state of mempool, where all pending/ queued tx(s)
 // are present. Among these pending tx(s), any of them can be picked up during next
@@ -24,21 +29,21 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 }
 
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
-func (m *MemPool) Process(pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
+func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
-	if v := m.Queued.RemoveUnstuck(m.Pending, pending, queued); v != 0 {
+	if v := m.Queued.RemoveUnstuck(ctx, pubsub, m.Pending, pending, queued); v != 0 {
 		log.Printf("🆗 Removed %d unstuck tx(s) from queued tx pool\n", v)
 	}
 
-	if v := m.Queued.AddQueued(queued); v != 0 {
+	if v := m.Queued.AddQueued(ctx, pubsub, queued); v != 0 {
 		log.Printf("☑️ Added %d tx(s) into queued tx pool\n", v)
 	}
 
-	if v := m.Pending.RemoveConfirmed(pending); v != 0 {
+	if v := m.Pending.RemoveConfirmed(ctx, pubsub, pending); v != 0 {
 		log.Printf("🆗 Removed %d confirmed tx(s) from pending tx pool\n", v)
 	}
 
-	if v := m.Pending.AddPendings(pending); v != 0 {
+	if v := m.Pending.AddPendings(ctx, pubsub, pending); v != 0 {
 		log.Printf("☑️ Added %d tx(s) into pending tx pool\n", v)
 	}
 
