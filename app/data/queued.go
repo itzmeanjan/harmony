@@ -174,6 +174,12 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pubsub *redis.Client, pe
 	// if they're supposed to be added there
 	for _, v := range buffer {
 
+		// If this tx is present in current pending pool
+		// content, it'll be pushed into mempool
+		if !IsPresentInCurrentPool(pending, v) {
+			continue
+		}
+
 		// removing unstuck tx
 		tx := q.Remove(ctx, pubsub, v)
 		if tx == nil {
@@ -184,12 +190,6 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pubsub *redis.Client, pe
 		// updating count of removed unstuck tx(s) from
 		// queued pool
 		count++
-
-		// If this tx is present in current pending pool
-		// content, it'll be pushed into mempool
-		if !IsPresentInCurrentPool(pending, v) {
-			continue
-		}
 
 		if !pendingPool.Add(ctx, pubsub, tx) {
 			log.Printf("[❗️] Failed to push unstuck tx into pending pool\n")
