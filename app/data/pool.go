@@ -32,7 +32,7 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
 	if v := m.Queued.RemoveUnstuck(ctx, pubsub, m.Pending, pending, queued); v != 0 {
-		log.Printf("🆗 Removed %d unstuck tx(s) from queued tx pool\n", v)
+		log.Printf("☑️ Removed %d unstuck tx(s) from queued tx pool\n", v)
 	}
 
 	if v := m.Queued.AddQueued(ctx, pubsub, queued); v != 0 {
@@ -40,7 +40,7 @@ func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map
 	}
 
 	if v := m.Pending.RemoveConfirmed(ctx, pubsub, pending); v != 0 {
-		log.Printf("🆗 Removed %d confirmed tx(s) from pending tx pool\n", v)
+		log.Printf("☑️ Removed %d confirmed tx(s) from pending tx pool\n", v)
 	}
 
 	if v := m.Pending.AddPendings(ctx, pubsub, pending); v != 0 {
