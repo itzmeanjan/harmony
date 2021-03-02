@@ -42,3 +42,29 @@ func GetMemPoolPollingPeriod() uint64 {
 	return _period
 
 }
+
+// GetPendingTxPublishTopic - Read provided topic name from `.env` file
+// where newly added pending pool tx(s) to be published
+func GetPendingTxPublishTopic() string {
+
+	if v := Get("PendingTxTopic"); len(v) != 0 {
+		return v
+	}
+
+	log.Printf("[❗️] Failed to get topic for publishing pending tx, using `pending_pool`\n")
+	return "pending_pool"
+
+}
+
+// GetQueuedTxPublishTopic - Read provided topic name from `.env` file
+// where newly added queued pool tx(s) to be published
+func GetQueuedTxPublishTopic() string {
+
+	if v := Get("QueuedTxTopic"); len(v) != 0 {
+		return v
+	}
+
+	log.Printf("[❗️] Failed to get topic for publishing queued tx, using `queued_pool`\n")
+	return "queued_pool"
+
+}
