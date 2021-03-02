@@ -1,11 +1,14 @@
 package data
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/go-redis/redis/v8"
+	"github.com/itzmeanjan/harmony/app/config"
 )
 
 // PendingPool - Currently present pending tx(s) i.e. which are ready to
@@ -30,7 +33,7 @@ func (p *PendingPool) Count() uint64 {
 //
 // If it returns `true`, it denotes, it's success, otherwise it's failure
 // because this tx is already present in pending pool
-func (p *PendingPool) Add(tx *MemPoolTx) bool {
+func (p *PendingPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
@@ -45,6 +48,29 @@ func (p *PendingPool) Add(tx *MemPoolTx) bool {
 
 	// Creating entry
 	p.Transactions[tx.Hash] = tx
+
+	return true
+
+}
+
+// PublishAdded - Publish new pending tx pool content ( in messagepack serialized format )
+// to pubsub topic
+func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) bool {
+
+	_msg, err := msg.ToMessagePack()
+	if err != nil {
+
+		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
+		return false
+
+	}
+
+	if err := pubsub.Publish(ctx, config.GetPendingTxEntryPublishTopic(), _msg).Err(); err != nil {
+
+		log.Printf("[❗️] Failed to publish new pending tx : %s\n", err.Error())
+		return false
+
+	}
 
 	return true
 
