@@ -109,6 +109,8 @@ func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]
 		return 0
 	}
 
+	var count uint64
+
 	// Iteratively removing entries which are
 	// not supposed to be present in queued mempool
 	// anymore
@@ -120,8 +122,13 @@ func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]
 		// removing unstuck tx
 		tx := q.Remove(v)
 		if tx == nil {
+			log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
 			continue
 		}
+
+		// updating count of removed unstuck tx(s) from
+		// queued pool
+		count++
 
 		// If this tx is present in current pending pool
 		// content, it'll be pushed into mempool
@@ -135,7 +142,7 @@ func (q *QueuedPool) RemoveUnstuck(pendingPool *PendingPool, pending map[string]
 
 	}
 
-	return uint64(len(buffer))
+	return count
 
 }
 

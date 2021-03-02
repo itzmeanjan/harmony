@@ -99,6 +99,8 @@ func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint
 		return 0
 	}
 
+	var count uint64
+
 	// Iteratively removing entries which are
 	// not supposed to be present in pending mempool
 	// anymore
@@ -106,11 +108,14 @@ func (p *PendingPool) RemoveConfirmed(txs map[string]map[string]*MemPoolTx) uint
 
 		if !p.Remove(v) {
 			log.Printf("[❗️] Failed to remove confirmed tx from pending pool\n")
+			continue
 		}
+
+		count++
 
 	}
 
-	return uint64(len(buffer))
+	return count
 
 }
 
