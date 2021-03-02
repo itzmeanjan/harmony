@@ -5,6 +5,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 // MemPoolTx - This is how tx is placed in mempool, after performing
@@ -30,4 +32,25 @@ type MemPoolTx struct {
 	PendingFrom      time.Time
 	QueuedAt         time.Time
 	Pool             string
+}
+
+// ToMessagePack - Serialize to message pack encoded byte array format
+func (m *MemPoolTx) ToMessagePack() ([]byte, error) {
+
+	return msgpack.Marshal(m)
+
+}
+
+// FromMessagePack - Given serialized byte array, attempts to deserialize
+// into structured format
+func FromMessagePack(data []byte) (*MemPoolTx, error) {
+
+	var tx *MemPoolTx
+
+	if err := msgpack.Unmarshal(data, tx); err != nil {
+		return nil, err
+	}
+
+	return tx, nil
+
 }
