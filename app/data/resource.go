@@ -1,6 +1,11 @@
 package data
 
-import "github.com/ethereum/go-ethereum/rpc"
+import (
+	"log"
+
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/go-redis/redis/v8"
+)
 
 // Resource - Shared resources among multiple go routines
 //
@@ -8,6 +13,7 @@ import "github.com/ethereum/go-ethereum/rpc"
 type Resource struct {
 	RPCClient *rpc.Client
 	Pool      *MemPool
+	Redis     *redis.Client
 }
 
 // Release - To be called when application will receive shut down request
@@ -15,5 +21,8 @@ type Resource struct {
 func (r *Resource) Release() {
 
 	r.RPCClient.Close()
+	if err := r.Redis.Close(); err != nil {
+		log.Printf("[❗️] Failed to close redis client : %s\n", err.Error())
+	}
 
 }
