@@ -132,21 +132,43 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 	// So we can also remove those from our pending pool
 	p.Lock.RLock()
 
-	for hash, tx := range p.Transactions {
+	commChan := make(chan TxStatus, len(p.Transactions))
 
-		// Checking whether this nonce is used
-		// in any mined tx ( including this )
-		yes, err := tx.IsNonceExhausted(ctx, rpc)
-		if err != nil {
+	for _, tx := range p.Transactions {
 
-			log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
-			continue
+		go func(tx *MemPoolTx) {
 
+			// Checking whether this nonce is used
+			// in any mined tx ( including this )
+			yes, err := tx.IsNonceExhausted(ctx, rpc)
+			if err != nil {
+
+				log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
+
+				commChan <- TxStatus{Hash: tx.Hash, Status: false}
+				return
+
+			}
+
+			commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+
+		}(tx)
+
+	}
+
+	var received int
+	mustReceive := len(p.Transactions)
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v.Status {
+			buffer = append(buffer, v.Hash)
 		}
 
-		// If yes, we should drop it
-		if yes {
-			buffer = append(buffer, hash)
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
