@@ -36,11 +36,27 @@ type MemPoolTx struct {
 	Pool             string
 }
 
+// IsUnstuck - Checking whether this tx is unstuck now
+//
+// @note Tx(s) generally get stuck in queued pool
+// due to nonce gaps
+func (m *MemPoolTx) IsUnstuck(ctx context.Context, rpc *rpc.Client) (bool, error) {
+
+	var result hexutil.Uint64
+
+	if err := rpc.CallContext(ctx, &result, "eth_getTransactionCount", m.From.Hex(), "latest"); err != nil {
+		return false, err
+	}
+
+	return m.Nonce <= result, nil
+
+}
+
 // IsConfirmed - Checks whether this mempool tx is already
 // included in any block or not
 func (m *MemPoolTx) IsConfirmed(ctx context.Context, rpc *rpc.Client) (bool, error) {
 
-	var result *MemPoolTx
+	var result MemPoolTx
 
 	if err := rpc.CallContext(ctx, &result, "eth_getTransactionByHash", m.Hash.Hex()); err != nil {
 		return false, err
