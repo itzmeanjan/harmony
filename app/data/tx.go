@@ -72,20 +72,6 @@ func (m *MemPoolTx) IsUnstuck(ctx context.Context, rpc *rpc.Client) (bool, error
 
 }
 
-// IsConfirmed - Checks whether this mempool tx is already
-// included in any block or not
-func (m *MemPoolTx) IsConfirmed(ctx context.Context, rpc *rpc.Client) (bool, error) {
-
-	var result MemPoolTx
-
-	if err := rpc.CallContext(ctx, &result, "eth_getTransactionByHash", m.Hash.Hex()); err != nil {
-		return false, err
-	}
-
-	return true, nil
-
-}
-
 // ToMessagePack - Serialize to message pack encoded byte array format
 func (m *MemPoolTx) ToMessagePack() ([]byte, error) {
 

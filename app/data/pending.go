@@ -134,17 +134,17 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 
 	for hash, tx := range p.Transactions {
 
-		// Checking whether this tx is confirmed or not
-		yes, err := tx.IsConfirmed(ctx, rpc)
+		// Checking whether this nonce is used
+		// in any mined tx ( including this )
+		yes, err := tx.IsNonceExhausted(ctx, rpc)
 		if err != nil {
 
-			log.Printf("[❗️] Failed to check if pending tx is confirmed : %s\n", err.Error())
+			log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
 			continue
 
 		}
 
-		// If yes, we'll consider removing it from pending queue
-		// while also publishing event on pubsub topic
+		// If yes, we should drop it
 		if yes {
 			buffer = append(buffer, hash)
 		}
