@@ -3,11 +3,13 @@ package data
 import (
 	"context"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gammazero/workerpool"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 )
@@ -150,24 +152,32 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 	// putting them in pending pool
 	q.Lock.RLock()
 
+	// Creating worker pool, where jobs to be submitted
+	// for concurrently checking status of tx(s)
+	wp := workerpool.New(runtime.NumCPU())
+
 	commChan := make(chan TxStatus, len(q.Transactions))
 
 	// Attempting to concurrently check status of tx(s)
 	for _, tx := range q.Transactions {
 
-		go func(tx *MemPoolTx) {
+		func(tx *MemPoolTx) {
 
-			yes, err := tx.IsUnstuck(ctx, rpc)
-			if err != nil {
+			wp.Submit(func() {
 
-				log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
+				yes, err := tx.IsUnstuck(ctx, rpc)
+				if err != nil {
 
-				commChan <- TxStatus{Hash: tx.Hash, Status: false}
-				return
+					log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
 
-			}
+					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					return
 
-			commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+				}
+
+				commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+
+			})
 
 		}(tx)
 
@@ -189,6 +199,12 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 		}
 
 	}
+
+	// This call is irrelevant here, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	q.Lock.RUnlock()
 	// -- Done with safely reading to be removed tx(s)

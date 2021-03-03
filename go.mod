@@ -7,6 +7,8 @@ require (
 	github.com/aristanetworks/goarista v0.0.0-20210226215200-83c2ba283955 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/ethereum/go-ethereum v1.9.25
+	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc // indirect
+	github.com/gammazero/workerpool v1.1.1 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/go-redis/redis/v8 v8.6.0
 	github.com/magiconair/properties v1.8.4 // indirect

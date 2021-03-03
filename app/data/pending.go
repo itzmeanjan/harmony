@@ -3,11 +3,13 @@ package data
 import (
 	"context"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gammazero/workerpool"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 )
@@ -136,25 +138,33 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 	// So we can also remove those from our pending pool
 	p.Lock.RLock()
 
+	// Creating worker pool, where jobs to be submitted
+	// for concurrently checking status of tx(s)
+	wp := workerpool.New(runtime.NumCPU())
+
 	commChan := make(chan TxStatus, len(p.Transactions))
 
 	for _, tx := range p.Transactions {
 
-		go func(tx *MemPoolTx) {
+		func(tx *MemPoolTx) {
 
-			// Checking whether this nonce is used
-			// in any mined tx ( including this )
-			yes, err := tx.IsNonceExhausted(ctx, rpc)
-			if err != nil {
+			wp.Submit(func() {
 
-				log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
+				// Checking whether this nonce is used
+				// in any mined tx ( including this )
+				yes, err := tx.IsNonceExhausted(ctx, rpc)
+				if err != nil {
 
-				commChan <- TxStatus{Hash: tx.Hash, Status: false}
-				return
+					log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
 
-			}
+					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					return
 
-			commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+				}
+
+				commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+
+			})
 
 		}(tx)
 
@@ -176,6 +186,12 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 		}
 
 	}
+
+	// This call is irrelevant here, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	p.Lock.RUnlock()
 	// -- Done with safely reading to be removed tx(s)
