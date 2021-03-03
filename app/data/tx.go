@@ -1,10 +1,12 @@
 package data
 
 import (
+	"context"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -32,6 +34,20 @@ type MemPoolTx struct {
 	PendingFrom      time.Time
 	QueuedAt         time.Time
 	Pool             string
+}
+
+// IsConfirmed - Checks whether this mempool tx is already
+// included in any block or not
+func (m *MemPoolTx) IsConfirmed(ctx context.Context, rpc *rpc.Client) (bool, error) {
+
+	var result *MemPoolTx
+
+	if err := rpc.CallContext(ctx, &result, "eth_getTransactionByHash", m.Hash.Hex()); err != nil {
+		return false, err
+	}
+
+	return true, nil
+
 }
 
 // ToMessagePack - Serialize to message pack encoded byte array format
