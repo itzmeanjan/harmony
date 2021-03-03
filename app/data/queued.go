@@ -146,18 +146,42 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 	// putting them in pending pool
 	q.Lock.RLock()
 
-	for hash, tx := range q.Transactions {
+	commChan := make(chan TxStatus, len(q.Transactions))
 
-		yes, err := tx.IsUnstuck(ctx, rpc)
-		if err != nil {
+	// Attempting to concurrently check status of tx(s)
+	for _, tx := range q.Transactions {
 
-			log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
-			continue
+		go func(tx *MemPoolTx) {
 
+			yes, err := tx.IsUnstuck(ctx, rpc)
+			if err != nil {
+
+				log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
+
+				commChan <- TxStatus{Hash: tx.Hash, Status: false}
+				return
+
+			}
+
+			commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+
+		}(tx)
+
+	}
+
+	var received int
+	mustReceive := len(q.Transactions)
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v.Status {
+			buffer = append(buffer, v.Hash)
 		}
 
-		if yes {
-			buffer = append(buffer, hash)
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}

@@ -92,3 +92,16 @@ func FromMessagePack(data []byte) (*MemPoolTx, error) {
 	return tx, nil
 
 }
+
+// TxStatus - When ever multiple go routines need to
+// concurrently fetch status of tx, given hash
+// they will communicate back to caller using this
+// data structure, where `status` denotes result of
+// intended check, which was performed concurrently
+//
+// @note Data to be sent in this form over communication
+// channel
+type TxStatus struct {
+	Hash   common.Hash
+	Status bool
+}
