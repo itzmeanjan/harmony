@@ -124,6 +124,10 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 // are still in pending state
 func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
+	if len(p.Transactions) == 0 {
+		return 0
+	}
+
 	buffer := make([]common.Hash, 0, len(p.Transactions))
 
 	// -- Attempt to safely find out which txHashes
