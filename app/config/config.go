@@ -2,6 +2,8 @@ package config
 
 import (
 	"log"
+	"math"
+	"runtime"
 	"strconv"
 
 	"github.com/spf13/viper"
@@ -17,6 +19,11 @@ func Read(file string) error {
 // Get - Get config value by key
 func Get(key string) string {
 	return viper.GetString(key)
+}
+
+// GetFloat - Parse confiig value as floating point number & return
+func GetFloat(key string) float64 {
+	return viper.GetFloat64(key)
 }
 
 // GetMemPoolPollingPeriod - Read mempool polling period & attempt to
@@ -110,5 +117,22 @@ func GetRedisDBIndex() uint8 {
 	}
 
 	return uint8(_db)
+
+}
+
+// GetConcurrencyFactor - Size of worker pool, is dictated by rule below
+//
+// @note You can set floating point value for `ConcurrencyFactor` ( > 0 )
+func GetConcurrencyFactor() int {
+
+	f := int(math.Ceil(GetFloat("ConcurrencyFactor") * float64(runtime.NumCPU())))
+	if f <= 0 {
+
+		log.Printf("[❗️] Bad concurrency factor, using unit sized pool\n")
+		return 1
+
+	}
+
+	return f
 
 }
