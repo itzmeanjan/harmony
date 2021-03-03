@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 )
@@ -132,7 +133,7 @@ func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, m
 //
 // Only when their respective blocking factor will get unblocked, they'll be pushed
 // into pending pool
-func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pubsub *redis.Client, pendingPool *PendingPool, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
+func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pendingPool *PendingPool, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
 
 	buffer := make([]common.Hash, 0, len(q.Transactions))
 
@@ -145,9 +146,17 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pubsub *redis.Client, pe
 	// putting them in pending pool
 	q.Lock.RLock()
 
-	for hash := range q.Transactions {
+	for hash, tx := range q.Transactions {
 
-		if !IsPresentInCurrentPool(queued, hash) {
+		yes, err := tx.IsUnstuck(ctx, rpc)
+		if err != nil {
+
+			log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
+			continue
+
+		}
+
+		if yes {
 			buffer = append(buffer, hash)
 		}
 
@@ -174,23 +183,21 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pubsub *redis.Client, pe
 	// if they're supposed to be added there
 	for _, v := range buffer {
 
-		// If this tx is present in current pending pool
-		// content, it'll be pushed into mempool
-		if !IsPresentInCurrentPool(pending, v) {
-			continue
-		}
-
 		// removing unstuck tx
 		tx := q.Remove(ctx, pubsub, v)
 		if tx == nil {
+
 			log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
 			continue
+
 		}
 
 		// updating count of removed unstuck tx(s) from
 		// queued pool
 		count++
 
+		// pushing unstuck tx into pending pool
+		// because now it's eligible for it
 		if !pendingPool.Add(ctx, pubsub, tx) {
 			log.Printf("[❗️] Failed to push unstuck tx into pending pool\n")
 		}

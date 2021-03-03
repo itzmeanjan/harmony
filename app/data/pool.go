@@ -33,7 +33,7 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
 func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
-	if v := m.Queued.RemoveUnstuck(ctx, pubsub, m.Pending, pending, queued); v != 0 {
+	if v := m.Queued.RemoveUnstuck(ctx, rpc, pubsub, m.Pending, pending, queued); v != 0 {
 		log.Printf("☑️ Removed %d unstuck tx(s) from queued tx pool\n", v)
 	}
 
