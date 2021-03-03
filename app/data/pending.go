@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"log"
-	"runtime"
 	"sync"
 	"time"
 
@@ -140,7 +139,7 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking status of tx(s)
-	wp := workerpool.New(runtime.NumCPU())
+	wp := workerpool.New(config.GetConcurrencyFactor())
 
 	commChan := make(chan TxStatus, len(p.Transactions))
 

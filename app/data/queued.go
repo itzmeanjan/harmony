@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"log"
-	"runtime"
 	"sync"
 	"time"
 
@@ -154,7 +153,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking status of tx(s)
-	wp := workerpool.New(runtime.NumCPU())
+	wp := workerpool.New(config.GetConcurrencyFactor())
 
 	commChan := make(chan TxStatus, len(q.Transactions))
 
