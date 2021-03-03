@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -30,7 +31,7 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 }
 
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
-func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
+func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
 	if v := m.Queued.RemoveUnstuck(ctx, pubsub, m.Pending, pending, queued); v != 0 {
 		log.Printf("☑️ Removed %d unstuck tx(s) from queued tx pool\n", v)
@@ -40,7 +41,7 @@ func (m *MemPool) Process(ctx context.Context, pubsub *redis.Client, pending map
 		log.Printf("☑️ Added %d tx(s) to queued tx pool\n", v)
 	}
 
-	if v := m.Pending.RemoveConfirmed(ctx, pubsub, pending); v != 0 {
+	if v := m.Pending.RemoveConfirmed(ctx, rpc, pubsub, pending); v != 0 {
 		log.Printf("☑️ Removed %d confirmed tx(s) from pending tx pool\n", v)
 	}
 

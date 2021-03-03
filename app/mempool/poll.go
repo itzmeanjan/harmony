@@ -10,11 +10,12 @@ import (
 	"github.com/itzmeanjan/harmony/app/data"
 )
 
-// PollTxPoolContent - Poll current content of Ethereum Mempool periodically & do further processing
-// processing with data received back
+// PollTxPoolContent - Poll current content of Ethereum Mempool periodically & do further
+// processing with data received back i.e. attempt to keep most fresh view of
+// mempool in `harmony`
 //
-// @note Further processing part is yet to be implemented
-func PollTxPoolContent(ctx context.Context, rpc *data.Resource, comm chan struct{}) {
+// Emit events on PubSub topics for listening to state changes
+func PollTxPoolContent(ctx context.Context, res *data.Resource, comm chan struct{}) {
 
 	for {
 
@@ -23,7 +24,7 @@ func PollTxPoolContent(ctx context.Context, rpc *data.Resource, comm chan struct
 
 		var result map[string]map[string]map[string]*data.MemPoolTx
 
-		if err := rpc.RPCClient.CallContext(ctx, &result, "txpool_content"); err != nil {
+		if err := res.RPCClient.CallContext(ctx, &result, "txpool_content"); err != nil {
 
 			log.Printf("[❗️] Failed to fetch mempool content : %s\n", err.Error())
 
@@ -41,8 +42,8 @@ func PollTxPoolContent(ctx context.Context, rpc *data.Resource, comm chan struct
 		}
 
 		// Process current tx pool content
-		rpc.Pool.Process(ctx, rpc.Redis, result["pending"], result["queued"])
-		rpc.Pool.Stat(start)
+		res.Pool.Process(ctx, res.RPCClient, res.Redis, result["pending"], result["queued"])
+		res.Pool.Stat(start)
 
 		// Sleep for desired amount of time & get to work again
 		<-time.After(time.Duration(config.GetMemPoolPollingPeriod()) * time.Millisecond)

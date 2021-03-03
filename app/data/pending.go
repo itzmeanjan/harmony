@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 )
@@ -121,20 +122,30 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 // RemoveConfirmed - Removes pending tx(s) from pool which have been confirmed
 // & returns how many were removed. If 0 is returned, denotes all tx(s) pending last time
 // are still in pending state
-func (p *PendingPool) RemoveConfirmed(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	buffer := make([]common.Hash, 0, len(p.Transactions))
 
 	// -- Attempt to safely find out which txHashes
-	// are absent in current mempool content, i.e. denoting
-	// those tx(s) are confirmed & mined in a block
+	// are confirmed i.e. included in a recent block
 	//
 	// So we can also remove those from our pending pool
 	p.Lock.RLock()
 
-	for hash := range p.Transactions {
+	for hash, tx := range p.Transactions {
 
-		if !IsPresentInCurrentPool(txs, hash) {
+		// Checking whether this tx is confirmed or not
+		yes, err := tx.IsConfirmed(ctx, rpc)
+		if err != nil {
+
+			log.Printf("[❗️] Failed to check if pending tx is confirmed : %s\n", err.Error())
+			continue
+
+		}
+
+		// If yes, we'll consider removing it from pending queue
+		// while also publishing event on pubsub topic
+		if yes {
 			buffer = append(buffer, hash)
 		}
 
