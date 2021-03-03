@@ -36,6 +36,26 @@ type MemPoolTx struct {
 	Pool             string
 }
 
+// IsNonceExhausted - Multiple tx(s) of same/ different value
+// can be sent to network with same nonce, where one of them
+// which seems most profitable to miner, will be picked up, while mining next block
+//
+// This function will help us in checking whether nonce of this tx is exhausted or not
+// i.e. whether some other tx is same nonce is mined or not
+//
+// If mined, we can drop this tx from mempool
+func (m *MemPoolTx) IsNonceExhausted(ctx context.Context, rpc *rpc.Client) (bool, error) {
+
+	var result hexutil.Uint64
+
+	if err := rpc.CallContext(ctx, &result, "eth_getTransactionCount", m.From.Hex(), "latest"); err != nil {
+		return false, err
+	}
+
+	return m.Nonce < result, nil
+
+}
+
 // IsUnstuck - Checking whether this tx is unstuck now
 //
 // @note Tx(s) generally get stuck in queued pool
