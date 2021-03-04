@@ -1,7 +1,7 @@
-![banner](./sc/banner.png)
-
 # harmony
 Reduce Chaos in MemPool 😌
+
+![banner](./sc/banner.png)
 
 ## Motivation
 
