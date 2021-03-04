@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/itzmeanjan/harmony/app/bootup"
-	"github.com/itzmeanjan/harmony/app/txpool"
+	"github.com/itzmeanjan/harmony/app/mempool"
 )
 
 func main() {
@@ -57,6 +57,7 @@ func main() {
 
 		}()
 
+	OUTER:
 		for {
 
 			select {
@@ -73,6 +74,7 @@ func main() {
 				//
 				// This is simply a blocking call i.e. blocks for 3 seconds
 				<-time.After(time.Second * time.Duration(3))
+				break OUTER
 
 			case <-comm:
 				// Supervisor go routine got to learn
@@ -83,6 +85,7 @@ func main() {
 				// It's supposed to spawn new go routine for handling that op
 				//
 				// @note To be implemented
+				break OUTER
 
 			}
 
@@ -90,7 +93,7 @@ func main() {
 
 	}()
 
-	go txpool.PollTxPoolContent(ctx, resources, comm)
+	go mempool.PollTxPoolContent(ctx, resources, comm)
 
 	// This is just a fancy of blocking execution, so that
 	// main go routine doesn't die & program keeps running
