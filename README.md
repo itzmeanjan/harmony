@@ -1,4 +1,4 @@
-![banner](./sc/banner.gif)
+![banner](./sc/banner.png)
 
 # harmony
 Reduce Chaos in MemPool 😌
