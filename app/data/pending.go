@@ -149,6 +149,16 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 
 			wp.Submit(func() {
 
+				// If this pending tx is present in current
+				// pending pool state obtained, no need
+				// check whether tx is confirmed or not
+				if IsPresentInCurrentPool(txs, tx.Hash) {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					return
+
+				}
+
 				// Checking whether this nonce is used
 				// in any mined tx ( including this )
 				yes, err := tx.IsNonceExhausted(ctx, rpc)

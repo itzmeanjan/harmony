@@ -164,6 +164,30 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 
 			wp.Submit(func() {
 
+				// If this queued tx is present in current
+				// queued pool state obtained from RPC node, no need
+				// check whether tx is unstuck or not
+				//
+				// @note Because it's definitely not unstuck
+				if IsPresentInCurrentPool(queued, tx.Hash) {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					return
+
+				}
+
+				// Now checking if tx has been moved to pending pool
+				// or not, if yes, we can consider this tx is unstuck
+				// it must be moved out of queued pool
+				if IsPresentInCurrentPool(pending, tx.Hash) {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: true}
+					return
+
+				}
+
+				// Finally checking whether this tx is unstuck or not
+				// by doing nonce comparison
 				yes, err := tx.IsUnstuck(ctx, rpc)
 				if err != nil {
 
