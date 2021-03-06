@@ -95,7 +95,9 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	}
 
 	// Passed this mempool handle to graphql query resolver
-	graph.InitMemPool(pool)
+	if err := graph.InitMemPool(pool); err != nil {
+		return nil, err
+	}
 
 	return &data.Resource{
 		RPCClient: client,

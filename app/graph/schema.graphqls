@@ -16,6 +16,9 @@ type MemPoolTx {
 }
 
 type Query {
-  pending: [MemPoolTx!]!
-  queued: [MemPoolTx!]!
+  pendingForMoreThan(x: String!): [MemPoolTx!]!
+  pendingForLessThan(x: String!): [MemPoolTx!]!
+
+  queuedForMoreThan(x: String!): [MemPoolTx!]!
+  queuedForLessThan(x: String!): [MemPoolTx!]!
 }
