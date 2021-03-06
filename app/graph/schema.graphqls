@@ -10,8 +10,8 @@ type MemPoolTx {
   v: String!
   r: String!
   s: String!
-  pendingFrom: String!
-  queuedAt: String!
+  pendingFor: String!
+  queuedFor: String!
   pool: String!
 }
 

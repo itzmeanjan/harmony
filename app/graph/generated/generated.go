@@ -43,20 +43,20 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	MemPoolTx struct {
-		From        func(childComplexity int) int
-		Gas         func(childComplexity int) int
-		GasPrice    func(childComplexity int) int
-		Hash        func(childComplexity int) int
-		Input       func(childComplexity int) int
-		Nonce       func(childComplexity int) int
-		PendingFrom func(childComplexity int) int
-		Pool        func(childComplexity int) int
-		QueuedAt    func(childComplexity int) int
-		R           func(childComplexity int) int
-		S           func(childComplexity int) int
-		To          func(childComplexity int) int
-		V           func(childComplexity int) int
-		Value       func(childComplexity int) int
+		From       func(childComplexity int) int
+		Gas        func(childComplexity int) int
+		GasPrice   func(childComplexity int) int
+		Hash       func(childComplexity int) int
+		Input      func(childComplexity int) int
+		Nonce      func(childComplexity int) int
+		PendingFor func(childComplexity int) int
+		Pool       func(childComplexity int) int
+		QueuedFor  func(childComplexity int) int
+		R          func(childComplexity int) int
+		S          func(childComplexity int) int
+		To         func(childComplexity int) int
+		V          func(childComplexity int) int
+		Value      func(childComplexity int) int
 	}
 
 	Query struct {
@@ -127,12 +127,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.MemPoolTx.Nonce(childComplexity), true
 
-	case "MemPoolTx.pendingFrom":
-		if e.complexity.MemPoolTx.PendingFrom == nil {
+	case "MemPoolTx.pendingFor":
+		if e.complexity.MemPoolTx.PendingFor == nil {
 			break
 		}
 
-		return e.complexity.MemPoolTx.PendingFrom(childComplexity), true
+		return e.complexity.MemPoolTx.PendingFor(childComplexity), true
 
 	case "MemPoolTx.pool":
 		if e.complexity.MemPoolTx.Pool == nil {
@@ -141,12 +141,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.MemPoolTx.Pool(childComplexity), true
 
-	case "MemPoolTx.queuedAt":
-		if e.complexity.MemPoolTx.QueuedAt == nil {
+	case "MemPoolTx.queuedFor":
+		if e.complexity.MemPoolTx.QueuedFor == nil {
 			break
 		}
 
-		return e.complexity.MemPoolTx.QueuedAt(childComplexity), true
+		return e.complexity.MemPoolTx.QueuedFor(childComplexity), true
 
 	case "MemPoolTx.r":
 		if e.complexity.MemPoolTx.R == nil {
@@ -259,8 +259,8 @@ var sources = []*ast.Source{
   v: String!
   r: String!
   s: String!
-  pendingFrom: String!
-  queuedAt: String!
+  pendingFor: String!
+  queuedFor: String!
   pool: String!
 }
 
@@ -714,7 +714,7 @@ func (ec *executionContext) _MemPoolTx_s(ctx context.Context, field graphql.Coll
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _MemPoolTx_pendingFrom(ctx context.Context, field graphql.CollectedField, obj *model.MemPoolTx) (ret graphql.Marshaler) {
+func (ec *executionContext) _MemPoolTx_pendingFor(ctx context.Context, field graphql.CollectedField, obj *model.MemPoolTx) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -732,7 +732,7 @@ func (ec *executionContext) _MemPoolTx_pendingFrom(ctx context.Context, field gr
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.PendingFrom, nil
+		return obj.PendingFor, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -749,7 +749,7 @@ func (ec *executionContext) _MemPoolTx_pendingFrom(ctx context.Context, field gr
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _MemPoolTx_queuedAt(ctx context.Context, field graphql.CollectedField, obj *model.MemPoolTx) (ret graphql.Marshaler) {
+func (ec *executionContext) _MemPoolTx_queuedFor(ctx context.Context, field graphql.CollectedField, obj *model.MemPoolTx) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -767,7 +767,7 @@ func (ec *executionContext) _MemPoolTx_queuedAt(ctx context.Context, field graph
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.QueuedAt, nil
+		return obj.QueuedFor, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2121,13 +2121,13 @@ func (ec *executionContext) _MemPoolTx(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "pendingFrom":
-			out.Values[i] = ec._MemPoolTx_pendingFrom(ctx, field, obj)
+		case "pendingFor":
+			out.Values[i] = ec._MemPoolTx_pendingFor(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "queuedAt":
-			out.Values[i] = ec._MemPoolTx_queuedAt(ctx, field, obj)
+		case "queuedFor":
+			out.Values[i] = ec._MemPoolTx_queuedFor(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
