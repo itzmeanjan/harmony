@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -144,8 +143,7 @@ func FromMessagePack(data []byte) (*MemPoolTx, error) {
 }
 
 // ToGraphQL - Convert to graphql compatible type
-// in JSON serialized form
-func (m *MemPoolTx) ToGraphQL() ([]byte, error) {
+func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 	var gqlTx *model.MemPoolTx
 
@@ -197,7 +195,7 @@ func (m *MemPoolTx) ToGraphQL() ([]byte, error) {
 
 	}
 
-	return json.Marshal(gqlTx)
+	return gqlTx
 
 }
 
