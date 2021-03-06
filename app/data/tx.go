@@ -153,46 +153,68 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 		gqlTx = &model.MemPoolTx{
 			From:       m.From.Hex(),
-			To:         m.To.Hex(),
 			Gas:        m.Gas.String(),
-			GasPrice:   m.GasPrice.String(),
 			Hash:       m.Hash.Hex(),
 			Input:      m.Input.String(),
 			Nonce:      m.Nonce.String(),
-			Value:      m.Value.String(),
-			V:          m.V.String(),
-			R:          m.R.String(),
-			S:          m.S.String(),
 			PendingFor: time.Now().UTC().Sub(m.PendingFrom).String(),
 			QueuedFor:  "0 s",
 			Pool:       m.Pool,
 		}
 
 		if !m.QueuedAt.Equal(time.Time{}) {
-
 			gqlTx.QueuedFor = m.PendingFrom.Sub(m.QueuedAt).String()
-
 		}
 
 	case "queued":
 
 		gqlTx = &model.MemPoolTx{
 			From:       m.From.Hex(),
-			To:         m.To.Hex(),
 			Gas:        m.Gas.String(),
-			GasPrice:   m.GasPrice.String(),
 			Hash:       m.Hash.Hex(),
 			Input:      m.Input.String(),
 			Nonce:      m.Nonce.String(),
-			Value:      m.Value.String(),
-			V:          m.V.String(),
-			R:          m.R.String(),
-			S:          m.S.String(),
 			PendingFor: "0 s",
 			QueuedFor:  time.Now().UTC().Sub(m.PendingFrom).String(),
 			Pool:       m.Pool,
 		}
 
+	}
+
+	if m.To != nil {
+		gqlTx.To = m.To.Hex()
+	} else {
+		gqlTx.To = "0x"
+	}
+
+	if m.GasPrice != nil {
+		gqlTx.GasPrice = m.GasPrice.String()
+	} else {
+		gqlTx.GasPrice = "0"
+	}
+
+	if m.Value != nil {
+		gqlTx.Value = m.Value.String()
+	} else {
+		gqlTx.Value = "0x"
+	}
+
+	if m.V != nil {
+		gqlTx.V = m.V.String()
+	} else {
+		gqlTx.V = "0x"
+	}
+
+	if m.R != nil {
+		gqlTx.R = m.R.String()
+	} else {
+		gqlTx.R = "0x"
+	}
+
+	if m.S != nil {
+		gqlTx.S = m.S.String()
+	} else {
+		gqlTx.S = "0x"
 	}
 
 	return gqlTx
