@@ -30,6 +30,30 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 	return m.Queued.Count()
 }
 
+// PendingForGTE - Returning list of tx(s), pending for more than
+// x time unit
+func (m *MemPool) PendingForGTE(x time.Duration) []*MemPoolTx {
+	return m.Pending.OlderThanX(x)
+}
+
+// PendingForLTE - Returning list of tx(s), pending for less than
+// x time unit
+func (m *MemPool) PendingForLTE(x time.Duration) []*MemPoolTx {
+	return m.Pending.FresherThanX(x)
+}
+
+// QueuedForGTE - Returning list of tx(s), queued for more than
+// x time unit
+func (m *MemPool) QueuedForGTE(x time.Duration) []*MemPoolTx {
+	return m.Queued.OlderThanX(x)
+}
+
+// QueuedForLTE - Returning list of tx(s), queued for less than
+// x time unit
+func (m *MemPool) QueuedForLTE(x time.Duration) []*MemPoolTx {
+	return m.Queued.FresherThanX(x)
+}
+
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
 func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
