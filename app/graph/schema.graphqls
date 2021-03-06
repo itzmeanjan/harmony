@@ -1,0 +1,21 @@
+type MemPoolTx {
+  from: String!
+  gas: String!
+  gasPrice: String!
+  hash: String!
+  input: String!
+  nonce: String!
+  to: String!
+  value: String!
+  v: String!
+  r: String!
+  s: String!
+  pendingFrom: String!
+  queuedAt: String!
+  pool: String!
+}
+
+type Query {
+  pending: [MemPoolTx!]!
+  queued: [MemPoolTx!]!
+}
