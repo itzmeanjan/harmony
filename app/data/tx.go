@@ -36,7 +36,7 @@ type MemPoolTx struct {
 	Pool             string
 }
 
-// IsPendingForGTE - Test if this tx was been in pending pool
+// IsPendingForGTE - Test if this tx has been in pending pool
 // for more than or equal to `X` time unit
 func (m *MemPoolTx) IsPendingForGTE(x time.Duration) bool {
 
@@ -48,7 +48,7 @@ func (m *MemPoolTx) IsPendingForGTE(x time.Duration) bool {
 
 }
 
-// IsPendingForLTE - Test if this tx was been in pending pool
+// IsPendingForLTE - Test if this tx has been in pending pool
 // for less than or equal to `X` time unit
 func (m *MemPoolTx) IsPendingForLTE(x time.Duration) bool {
 
@@ -57,6 +57,30 @@ func (m *MemPoolTx) IsPendingForLTE(x time.Duration) bool {
 	}
 
 	return time.Now().UTC().Sub(m.PendingFrom) <= x
+
+}
+
+// IsQueuedForGTE - Test if this tx has been in queued pool
+// for more than or equal to `X` time unit
+func (m *MemPoolTx) IsQueuedForGTE(x time.Duration) bool {
+
+	if m.Pool != "queued" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.QueuedAt) >= x
+
+}
+
+// IsQueuedForLTE - Test if this tx has been in queued pool
+// for less than or equal to `X` time unit
+func (m *MemPoolTx) IsQueuedForLTE(x time.Duration) bool {
+
+	if m.Pool != "queued" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.QueuedAt) <= x
 
 }
 
