@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
@@ -31,6 +32,7 @@ func Start(ctx context.Context, res *data.Resource) {
 			return c.JSON(http.StatusOK, &data.Stat{
 				PendingPoolSize: res.Pool.PendingPoolLength(),
 				QueuedPoolSize:  res.Pool.QueuedPoolLength(),
+				Uptime:          time.Now().UTC().Sub(res.StartedAt),
 			})
 
 		})

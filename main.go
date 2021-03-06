@@ -11,6 +11,7 @@ import (
 
 	"github.com/itzmeanjan/harmony/app/bootup"
 	"github.com/itzmeanjan/harmony/app/mempool"
+	"github.com/itzmeanjan/harmony/app/server"
 )
 
 func main() {
@@ -52,7 +53,7 @@ func main() {
 			resources.Release()
 
 			// Stopping process
-			log.Printf("\n[✅] Gracefully shut down `harmony`\n")
+			log.Printf("\n[✅] Gracefully shut down `harmony` after %s\n", time.Now().UTC().Sub(resources.StartedAt))
 			os.Exit(0)
 
 		}()
@@ -93,11 +94,11 @@ func main() {
 
 	}()
 
+	// Starting tx pool monitor as a seperate worker
 	go mempool.PollTxPoolContent(ctx, resources, comm)
 
-	// This is just a fancy of blocking execution, so that
-	// main go routine doesn't die & program keeps running
-	stop := make(chan struct{})
-	<-stop
+	// Main go routine, starts one http server &
+	// interfaces with external world
+	server.Start(ctx, resources)
 
 }
