@@ -2,6 +2,7 @@ package data
 
 import (
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -36,11 +37,16 @@ func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.
 
 }
 
+// Removes prepended `0{x, X}` from hex string
+func remove0x(num string) string {
+	return strings.Replace(strings.Replace(num, "0x", "", -1), "0X", "", -1)
+}
+
 // HexToDecimal - Converts hex encoded uint64 to decimal string
 func HexToDecimal(num hexutil.Uint64) string {
 
 	_num := big.NewInt(0)
-	_num.SetString(num.String(), 16)
+	_num.SetString(remove0x(num.String()), 16)
 
 	return _num.String()
 
@@ -50,7 +56,7 @@ func HexToDecimal(num hexutil.Uint64) string {
 func BigHexToDecimal(num *hexutil.Big) string {
 
 	_num := big.NewInt(0)
-	_num.SetString(num.String(), 16)
+	_num.SetString(remove0x(num.String()), 16)
 
 	return _num.String()
 
