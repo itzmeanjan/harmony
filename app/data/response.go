@@ -8,3 +8,9 @@ type Stat struct {
 	Uptime          string `json:"uptime"`
 	NetworkID       uint64 `json:"networkID"`
 }
+
+// Msg - Response message sent to client
+type Msg struct {
+	Code    uint8  `json:"code,omitempty"`
+	Message string `json:"message"`
+}
