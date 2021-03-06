@@ -11,6 +11,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
+	"github.com/itzmeanjan/harmony/app/graph"
 )
 
 // GetNetwork - Make RPC call for reading network ID
@@ -82,18 +83,23 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	pool := &data.MemPool{
+		Pending: &data.PendingPool{
+			Transactions: make(map[common.Hash]*data.MemPoolTx),
+			Lock:         &sync.RWMutex{},
+		},
+		Queued: &data.QueuedPool{
+			Transactions: make(map[common.Hash]*data.MemPoolTx),
+			Lock:         &sync.RWMutex{},
+		},
+	}
+
+	// Passed this mempool handle to graphql query resolver
+	graph.InitMemPool(pool)
+
 	return &data.Resource{
 		RPCClient: client,
-		Pool: &data.MemPool{
-			Pending: &data.PendingPool{
-				Transactions: make(map[common.Hash]*data.MemPoolTx),
-				Lock:         &sync.RWMutex{},
-			},
-			Queued: &data.QueuedPool{
-				Transactions: make(map[common.Hash]*data.MemPoolTx),
-				Lock:         &sync.RWMutex{},
-			},
-		},
+		Pool:      pool,
 		Redis:     _redis,
 		StartedAt: time.Now().UTC(),
 		NetworkID: network}, nil

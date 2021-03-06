@@ -15,10 +15,10 @@ import (
 
 var memPool *data.MemPool
 
-// Must be invoked when setting up,
+// InitMemPool - Must be invoked when setting up
 // application, so that graphql calls
-// can query this mempool forming client responses
-func initMemPool(pool *data.MemPool) bool {
+// can query this mempool, for forming client responses
+func InitMemPool(pool *data.MemPool) bool {
 
 	if pool != nil {
 		memPool = pool
