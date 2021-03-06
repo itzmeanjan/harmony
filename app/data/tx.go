@@ -2,11 +2,13 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/itzmeanjan/harmony/app/graph/model"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -138,6 +140,64 @@ func FromMessagePack(data []byte) (*MemPoolTx, error) {
 	}
 
 	return tx, nil
+
+}
+
+// ToGraphQL - Convert to graphql compatible type
+// in JSON serialized form
+func (m *MemPoolTx) ToGraphQL() ([]byte, error) {
+
+	var gqlTx *model.MemPoolTx
+
+	switch m.Pool {
+
+	case "pending":
+
+		gqlTx = &model.MemPoolTx{
+			From:       m.From.Hex(),
+			To:         m.To.Hex(),
+			Gas:        m.Gas.String(),
+			GasPrice:   m.GasPrice.String(),
+			Hash:       m.Hash.Hex(),
+			Input:      m.Input.String(),
+			Nonce:      m.Nonce.String(),
+			Value:      m.Value.String(),
+			V:          m.V.String(),
+			R:          m.R.String(),
+			S:          m.S.String(),
+			PendingFor: time.Now().UTC().Sub(m.PendingFrom).String(),
+			QueuedFor:  "0 s",
+			Pool:       m.Pool,
+		}
+
+		if !m.QueuedAt.Equal(time.Time{}) {
+
+			gqlTx.QueuedFor = m.PendingFrom.Sub(m.QueuedAt).String()
+
+		}
+
+	case "queued":
+
+		gqlTx = &model.MemPoolTx{
+			From:       m.From.Hex(),
+			To:         m.To.Hex(),
+			Gas:        m.Gas.String(),
+			GasPrice:   m.GasPrice.String(),
+			Hash:       m.Hash.Hex(),
+			Input:      m.Input.String(),
+			Nonce:      m.Nonce.String(),
+			Value:      m.Value.String(),
+			V:          m.V.String(),
+			R:          m.R.String(),
+			S:          m.S.String(),
+			PendingFor: "0 s",
+			QueuedFor:  time.Now().UTC().Sub(m.PendingFrom).String(),
+			Pool:       m.Pool,
+		}
+
+	}
+
+	return json.Marshal(gqlTx)
 
 }
 
