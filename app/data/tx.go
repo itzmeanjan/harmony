@@ -36,6 +36,30 @@ type MemPoolTx struct {
 	Pool             string
 }
 
+// IsPendingForGTEX - Test if this tx was been in pending pool
+// for more than or equal to `X` time unit
+func (m *MemPoolTx) IsPendingForGTEX(x time.Duration) bool {
+
+	if m.Pool != "pending" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.PendingFrom) >= x
+
+}
+
+// IsPendingForLTEX - Test if this tx was been in pending pool
+// for less than or equal to `X` time unit
+func (m *MemPoolTx) IsPendingForLTEX(x time.Duration) bool {
+
+	if m.Pool != "pending" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.PendingFrom) <= x
+
+}
+
 // IsNonceExhausted - Multiple tx(s) of same/ different value
 // can be sent to network with same nonce, where one of them
 // which seems most profitable to miner, will be picked up, while mining next block
