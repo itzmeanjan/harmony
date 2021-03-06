@@ -29,7 +29,7 @@ During my journey of exploring Ethereum MemPool, I found good initiative from [B
 
 > Note : Consider setting up Redis instance with password protection
 
-- Get one Ethereum Node up & running, with `txpool` RPC API enabled. You can always use public RPC nodes
+- Get one Ethereum Node up & running, with `txpool` RPC API enabled. You can always use SaaS Ethereum node.
 
 ## Installation
 
@@ -55,7 +55,7 @@ QueuedTxEntryTopic=queued_pool_entry
 QueuedTxExitTopic=queued_pool_exit
 RedisConnection=tcp
 RedisAddress=127.0.0.1:6379
-RedisPassword=redis
+RedisPassword=password
 RedisDB=1
 ConcurrencyFactor=10
 Port=7000
