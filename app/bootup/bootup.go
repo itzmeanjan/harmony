@@ -2,6 +2,7 @@ package bootup
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,6 +12,24 @@ import (
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 )
+
+// GetNetwork - Make RPC call for reading network ID
+func GetNetwork(ctx context.Context, rpc *rpc.Client) (uint64, error) {
+
+	var result string
+
+	if err := rpc.CallContext(ctx, &result, "net_version"); err != nil {
+		return 0, err
+	}
+
+	_result, err := strconv.ParseUint(result, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return _result, nil
+
+}
 
 // SetGround - This is to be called when starting application
 // for doing basic ground work(s), so that all required resources
@@ -57,6 +76,12 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	// Attempt to read current network ID
+	network, err := GetNetwork(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
 	return &data.Resource{
 		RPCClient: client,
 		Pool: &data.MemPool{
@@ -70,6 +95,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 			},
 		},
 		Redis:     _redis,
-		StartedAt: time.Now().UTC()}, nil
+		StartedAt: time.Now().UTC(),
+		NetworkID: network}, nil
 
 }
