@@ -5,26 +5,53 @@ package graph
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/itzmeanjan/harmony/app/graph/generated"
 	"github.com/itzmeanjan/harmony/app/graph/model"
 )
 
 func (r *queryResolver) PendingForMoreThan(ctx context.Context, x string) ([]*model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	dur, err := parseDuration(x)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphQL(memPool.PendingForGTE(dur)), nil
+
 }
 
 func (r *queryResolver) PendingForLessThan(ctx context.Context, x string) ([]*model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	dur, err := parseDuration(x)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphQL(memPool.PendingForLTE(dur)), nil
+
 }
 
 func (r *queryResolver) QueuedForMoreThan(ctx context.Context, x string) ([]*model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	dur, err := parseDuration(x)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphQL(memPool.QueuedForGTE(dur)), nil
+
 }
 
 func (r *queryResolver) QueuedForLessThan(ctx context.Context, x string) ([]*model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	dur, err := parseDuration(x)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGraphQL(memPool.QueuedForLTE(dur)), nil
+
 }
 
 // Query returns generated.QueryResolver implementation.
