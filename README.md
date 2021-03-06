@@ -39,7 +39,7 @@ During my journey of exploring Ethereum MemPool, I found good initiative from [B
 git clone https://github.com/itzmeanjan/harmony.git
 ```
 
-- After getting inside `harmony`, create `.env` file with following content
+- After getting inside `harmony`, create `.env` file with 👇 content
 
 ```bash
 cd harmony
@@ -81,3 +81,195 @@ Port | Starts HTTP server on this port ( > 1024 )
 ```bash
 make run
 ```
+
+## Usage
+
+### Status of MemPool
+
+For checking current state of mempool, you can issue one HTTP GET request
+
+Method : **GET**
+
+URL : **/v1/stat**
+
+
+```bash
+curl -s localhost:7000/v1/stat | jq
+```
+
+You'll receive response like 👇
+
+```json
+{
+  "pendingPoolSize": 67,
+  "queuedPoolSize": 0,
+  "uptime": "29.214603s",
+  "networkID": 137
+}
+```
+
+Field | Interpretation
+--- | ---
+pendingPoolSize | Currently these many tx(s) are in pending state i.e. waiting to be picked up by some miner when next block gets mined
+queuedPoolSize | These tx(s) are stuck, will only be eligible for mining when lower nonce tx(s) of same wallet gets mined
+uptime | This mempool monitoring engine is alive for last `t` time unit
+networkID | The mempool monitoring engine keeps track of mempool of this network
+
+### Pending Pool
+
+For listing all tx(s) pending for more than or equals to `x` time unit, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  pendingForMoreThan(x: "10s") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+You'll receive response of form
+
+```json
+{
+  "data": {
+    "pendingForMoreThan": [
+      {
+        "from": "0xdF0692E287A763e5c011cc96Ee402994c6Dd246E",
+        "gas": "35743",
+        "gasPrice": "74000000000",
+        "hash": "0x142f95b4615ad31d5435fb979a07405d50b70a2dab2707001cdb04853b75537e",
+        "input": "0x22c67519000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000001e35",
+        "nonce": "108",
+        "to": "0x86935F11C86623deC8a25696E1C19a8659CbF95d",
+        "value": "0x0",
+        "v": "0x136",
+        "r": "0x4becd37941425526e5a1d361a44fd5f911affacaa5526e42e7a20c4a9fb04f90",
+        "s": "0x3052c55bf6ac67326b4adb92c9ff3288ffe0f0be829b726c2a1cf5b9a58dca5c",
+        "pendingFor": "10.677797s",
+        "queuedFor": "0 s",
+        "pool": "pending"
+      }
+    ]
+  }
+}
+```
+
+---
+
+For listing all tx(s) pending for less than or equals to `x` time unit, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  pendingForLessThan(x: "1m10s") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+### Queued Pool
+
+For listing all tx(s) queued for more than or equals to `x` time unit, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  queuedForMoreThan(x: "1h10m39s") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+For listing all tx(s) queued for less than or equals to `x` time unit, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  queuedForLessThan(x: "1m10s100ms") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+## GraphQL Playground
+
+`harmony` packs one graphQL playground for you.
+
+![graphql_playground](./sc/gql_playground.png)
+
+URI : `https://<base-url>/v1/graphql-playground`
+
+---
+> Note: `harmony` is not recommended for use in production environment at time of writing this. It's under active development.
+---
