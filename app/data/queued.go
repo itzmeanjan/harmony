@@ -34,6 +34,48 @@ func (q *QueuedPool) Count() uint64 {
 
 }
 
+// OlderThanX - Returns a list of all queued tx(s), which are
+// living in mempool for more than or equals to `X` time unit
+func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsQueuedForGTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// FresherThanX - Returns a list of all queued tx(s), which are
+// living in mempool for less than or equals to `X` time unit
+func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsQueuedForLTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
 // Add - Attempts to add new tx found in pending pool into
 // harmony mempool, so that further manipulation can be performed on it
 //
