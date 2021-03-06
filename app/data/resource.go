@@ -16,6 +16,7 @@ type Resource struct {
 	Pool      *MemPool
 	Redis     *redis.Client
 	StartedAt time.Time
+	NetworkID uint64
 }
 
 // Release - To be called when application will receive shut down request
