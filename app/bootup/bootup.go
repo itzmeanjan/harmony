@@ -3,6 +3,7 @@ package bootup
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -68,6 +69,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 				Lock:         &sync.RWMutex{},
 			},
 		},
-		Redis: _redis}, nil
+		Redis:     _redis,
+		StartedAt: time.Now().UTC()}, nil
 
 }
