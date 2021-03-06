@@ -24,7 +24,7 @@ func Start(ctx context.Context, res *data.Resource) {
 
 	router.Use(middleware.LoggerWithConfig(
 		middleware.LoggerConfig{
-			Format: "${time_rfc3339} | ${method} | ${uri} | ${status} | ${remote_ip} | ${latency_human}\n",
+			Format: "${time_rfc3339} [📩] ${method} | ${uri} | ${status} | ${remote_ip} | ${latency_human}\n",
 		}))
 
 	v1 := router.Group("/v1")

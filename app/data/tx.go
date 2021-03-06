@@ -153,10 +153,10 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 		gqlTx = &model.MemPoolTx{
 			From:       m.From.Hex(),
-			Gas:        m.Gas.String(),
+			Gas:        HexToDecimal(m.Gas),
 			Hash:       m.Hash.Hex(),
 			Input:      m.Input.String(),
-			Nonce:      m.Nonce.String(),
+			Nonce:      HexToDecimal(m.Nonce),
 			PendingFor: time.Now().UTC().Sub(m.PendingFrom).String(),
 			QueuedFor:  "0 s",
 			Pool:       m.Pool,
@@ -170,10 +170,10 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 		gqlTx = &model.MemPoolTx{
 			From:       m.From.Hex(),
-			Gas:        m.Gas.String(),
+			Gas:        HexToDecimal(m.Gas),
 			Hash:       m.Hash.Hex(),
 			Input:      m.Input.String(),
-			Nonce:      m.Nonce.String(),
+			Nonce:      HexToDecimal(m.Nonce),
 			PendingFor: "0 s",
 			QueuedFor:  time.Now().UTC().Sub(m.PendingFrom).String(),
 			Pool:       m.Pool,
@@ -188,7 +188,7 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 	}
 
 	if m.GasPrice != nil {
-		gqlTx.GasPrice = m.GasPrice.String()
+		gqlTx.GasPrice = BigHexToDecimal(m.GasPrice)
 	} else {
 		gqlTx.GasPrice = "0"
 	}

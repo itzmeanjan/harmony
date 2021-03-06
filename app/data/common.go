@@ -37,7 +37,7 @@ func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.
 }
 
 // HexToDecimal - Converts hex encoded uint64 to decimal string
-func HexToDecimal(num *hexutil.Uint64) string {
+func HexToDecimal(num hexutil.Uint64) string {
 
 	_num := big.NewInt(0)
 	_num.SetString(num.String(), 16)
