@@ -2,8 +2,10 @@ package graph
 
 import (
 	"errors"
+	"time"
 
 	"github.com/itzmeanjan/harmony/app/data"
+	"github.com/itzmeanjan/harmony/app/graph/model"
 )
 
 var memPool *data.MemPool
@@ -18,5 +20,33 @@ func InitMemPool(pool *data.MemPool) error {
 	}
 
 	return errors.New("Bad mempool received in graphQL handler")
+
+}
+
+// Given a list of mempool tx(s), convert them to
+// compatible list of graphql tx(s)
+func toGraphQL(txs []*data.MemPoolTx) []*model.MemPoolTx {
+
+	res := make([]*model.MemPoolTx, 0, len(txs))
+
+	for _, tx := range txs {
+
+		res = append(res, tx.ToGraphQL())
+
+	}
+
+	return res
+
+}
+
+// Attempts to parse duration, obtained from user query
+func parseDuration(d string) (time.Duration, error) {
+
+	dur, err := time.ParseDuration(d)
+	if err != nil {
+		return time.Duration(0), err
+	}
+
+	return dur, nil
 
 }
