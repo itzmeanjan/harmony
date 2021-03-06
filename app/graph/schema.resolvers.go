@@ -6,10 +6,29 @@ package graph
 import (
 	"context"
 	"fmt"
+	"log"
 
+	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph/generated"
 	"github.com/itzmeanjan/harmony/app/graph/model"
 )
+
+var memPool *data.MemPool
+
+// Must be invoked when setting up,
+// application, so that graphql calls
+// can query this mempool forming client responses
+func initMemPool(pool *data.MemPool) bool {
+
+	if pool != nil {
+		memPool = pool
+		return true
+	}
+
+	log.Printf("[❌] Bad mempool received in graphQL handler\n")
+	return false
+
+}
 
 func (r *queryResolver) Pending(ctx context.Context) ([]*model.MemPoolTx, error) {
 	panic(fmt.Errorf("not implemented"))
