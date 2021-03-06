@@ -36,9 +36,9 @@ type MemPoolTx struct {
 	Pool             string
 }
 
-// IsPendingForGTEX - Test if this tx was been in pending pool
+// IsPendingForGTE - Test if this tx was been in pending pool
 // for more than or equal to `X` time unit
-func (m *MemPoolTx) IsPendingForGTEX(x time.Duration) bool {
+func (m *MemPoolTx) IsPendingForGTE(x time.Duration) bool {
 
 	if m.Pool != "pending" {
 		return false
@@ -48,9 +48,9 @@ func (m *MemPoolTx) IsPendingForGTEX(x time.Duration) bool {
 
 }
 
-// IsPendingForLTEX - Test if this tx was been in pending pool
+// IsPendingForLTE - Test if this tx was been in pending pool
 // for less than or equal to `X` time unit
-func (m *MemPoolTx) IsPendingForLTEX(x time.Duration) bool {
+func (m *MemPoolTx) IsPendingForLTE(x time.Duration) bool {
 
 	if m.Pool != "pending" {
 		return false

@@ -30,6 +30,48 @@ func (p *PendingPool) Count() uint64 {
 
 }
 
+// OlderThanX - Returns a list of all pending tx(s), which are
+// living in mempool for more than or equals to `X` time unit
+func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsPendingForGTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// FresherThanX - Returns a list of all pending tx(s), which are
+// living in mempool for less than or equals to `X` time unit
+func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsPendingForLTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
 // Add - Attempts to add new tx found in pending pool into
 // harmony mempool, so that further manipulation can be performed on it
 //
