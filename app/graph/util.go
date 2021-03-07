@@ -2,6 +2,8 @@ package graph
 
 import (
 	"errors"
+	"log"
+	"regexp"
 	"time"
 
 	"github.com/itzmeanjan/harmony/app/data"
@@ -48,5 +50,20 @@ func parseDuration(d string) (time.Duration, error) {
 	}
 
 	return dur, nil
+
+}
+
+// Checks whether received string is valid address or not
+func checkAddress(address string) bool {
+
+	reg, err := regexp.Compile(`^(0x\w{40})$`)
+	if err != nil {
+
+		log.Printf("[!] Failed to compile regular expression : %s\n", err.Error())
+		return false
+
+	}
+
+	return reg.MatchString(address)
 
 }

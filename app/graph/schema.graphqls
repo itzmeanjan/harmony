@@ -21,4 +21,10 @@ type Query {
 
   queuedForMoreThan(x: String!): [MemPoolTx!]!
   queuedForLessThan(x: String!): [MemPoolTx!]!
+
+  pendingFrom(addr: String!): [MemPoolTx!]!
+  pendingTo(addr: String!): [MemPoolTx!]!
+
+  queuedFrom(addr: String!): [MemPoolTx!]!
+  queuedTo(addr: String!): [MemPoolTx!]!
 }

@@ -62,8 +62,12 @@ type ComplexityRoot struct {
 	Query struct {
 		PendingForLessThan func(childComplexity int, x string) int
 		PendingForMoreThan func(childComplexity int, x string) int
+		PendingFrom        func(childComplexity int, addr string) int
+		PendingTo          func(childComplexity int, addr string) int
 		QueuedForLessThan  func(childComplexity int, x string) int
 		QueuedForMoreThan  func(childComplexity int, x string) int
+		QueuedFrom         func(childComplexity int, addr string) int
+		QueuedTo           func(childComplexity int, addr string) int
 	}
 }
 
@@ -72,6 +76,10 @@ type QueryResolver interface {
 	PendingForLessThan(ctx context.Context, x string) ([]*model.MemPoolTx, error)
 	QueuedForMoreThan(ctx context.Context, x string) ([]*model.MemPoolTx, error)
 	QueuedForLessThan(ctx context.Context, x string) ([]*model.MemPoolTx, error)
+	PendingFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error)
+	PendingTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error)
+	QueuedFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error)
+	QueuedTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error)
 }
 
 type executableSchema struct {
@@ -211,6 +219,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.PendingForMoreThan(childComplexity, args["x"].(string)), true
 
+	case "Query.pendingFrom":
+		if e.complexity.Query.PendingFrom == nil {
+			break
+		}
+
+		args, err := ec.field_Query_pendingFrom_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.PendingFrom(childComplexity, args["addr"].(string)), true
+
+	case "Query.pendingTo":
+		if e.complexity.Query.PendingTo == nil {
+			break
+		}
+
+		args, err := ec.field_Query_pendingTo_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.PendingTo(childComplexity, args["addr"].(string)), true
+
 	case "Query.queuedForLessThan":
 		if e.complexity.Query.QueuedForLessThan == nil {
 			break
@@ -234,6 +266,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.QueuedForMoreThan(childComplexity, args["x"].(string)), true
+
+	case "Query.queuedFrom":
+		if e.complexity.Query.QueuedFrom == nil {
+			break
+		}
+
+		args, err := ec.field_Query_queuedFrom_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.QueuedFrom(childComplexity, args["addr"].(string)), true
+
+	case "Query.queuedTo":
+		if e.complexity.Query.QueuedTo == nil {
+			break
+		}
+
+		args, err := ec.field_Query_queuedTo_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.QueuedTo(childComplexity, args["addr"].(string)), true
 
 	}
 	return 0, false
@@ -308,6 +364,12 @@ type Query {
 
   queuedForMoreThan(x: String!): [MemPoolTx!]!
   queuedForLessThan(x: String!): [MemPoolTx!]!
+
+  pendingFrom(addr: String!): [MemPoolTx!]!
+  pendingTo(addr: String!): [MemPoolTx!]!
+
+  queuedFrom(addr: String!): [MemPoolTx!]!
+  queuedTo(addr: String!): [MemPoolTx!]!
 }
 `, BuiltIn: false},
 }
@@ -362,6 +424,36 @@ func (ec *executionContext) field_Query_pendingForMoreThan_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_pendingFrom_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["addr"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addr"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addr"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_pendingTo_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["addr"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addr"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addr"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_queuedForLessThan_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -389,6 +481,36 @@ func (ec *executionContext) field_Query_queuedForMoreThan_args(ctx context.Conte
 		}
 	}
 	args["x"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_queuedFrom_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["addr"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addr"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addr"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_queuedTo_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["addr"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addr"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addr"] = arg0
 	return args, nil
 }
 
@@ -1072,6 +1194,174 @@ func (ec *executionContext) _Query_queuedForLessThan(ctx context.Context, field 
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().QueuedForLessThan(rctx, args["x"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.MemPoolTx)
+	fc.Result = res
+	return ec.marshalNMemPoolTx2ᚕᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTxᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_pendingFrom(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_pendingFrom_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().PendingFrom(rctx, args["addr"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.MemPoolTx)
+	fc.Result = res
+	return ec.marshalNMemPoolTx2ᚕᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTxᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_pendingTo(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_pendingTo_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().PendingTo(rctx, args["addr"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.MemPoolTx)
+	fc.Result = res
+	return ec.marshalNMemPoolTx2ᚕᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTxᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_queuedFrom(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_queuedFrom_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().QueuedFrom(rctx, args["addr"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.MemPoolTx)
+	fc.Result = res
+	return ec.marshalNMemPoolTx2ᚕᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTxᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_queuedTo(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_queuedTo_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().QueuedTo(rctx, args["addr"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2412,6 +2702,62 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_queuedForLessThan(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "pendingFrom":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_pendingFrom(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "pendingTo":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_pendingTo(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "queuedFrom":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_queuedFrom(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "queuedTo":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_queuedTo(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}

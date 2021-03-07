@@ -5,7 +5,9 @@ package graph
 
 import (
 	"context"
+	"errors"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/itzmeanjan/harmony/app/graph/generated"
 	"github.com/itzmeanjan/harmony/app/graph/model"
 )
@@ -51,6 +53,46 @@ func (r *queryResolver) QueuedForLessThan(ctx context.Context, x string) ([]*mod
 	}
 
 	return toGraphQL(memPool.QueuedForLTE(dur)), nil
+
+}
+
+func (r *queryResolver) PendingFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
+
+	if !checkAddress(addr) {
+		return nil, errors.New("Invalid address")
+	}
+
+	return toGraphQL(memPool.PendingFrom(common.HexToAddress(addr))), nil
+
+}
+
+func (r *queryResolver) PendingTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
+
+	if !checkAddress(addr) {
+		return nil, errors.New("Invalid address")
+	}
+
+	return toGraphQL(memPool.PendingTo(common.HexToAddress(addr))), nil
+
+}
+
+func (r *queryResolver) QueuedFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
+
+	if !checkAddress(addr) {
+		return nil, errors.New("Invalid address")
+	}
+
+	return toGraphQL(memPool.QueuedFrom(common.HexToAddress(addr))), nil
+
+}
+
+func (r *queryResolver) QueuedTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
+
+	if !checkAddress(addr) {
+		return nil, errors.New("Invalid address")
+	}
+
+	return toGraphQL(memPool.QueuedTo(common.HexToAddress(addr))), nil
 
 }
 
