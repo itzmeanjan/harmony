@@ -37,6 +37,27 @@ type MemPoolTx struct {
 	Pool             string
 }
 
+// IsSentFrom - Checks whether this tx was sent from specified address
+// or not
+func (m *MemPoolTx) IsSentFrom(address common.Address) bool {
+
+	return m.From == address
+
+}
+
+// IsSentTo - Checks if this was sent to certain address ( EOA/ Contract )
+//
+// @note If it's a contract creation tx, it'll not have `to` address
+func (m *MemPoolTx) IsSentTo(address common.Address) bool {
+
+	if m.To == nil {
+		return false
+	}
+
+	return *m.To == address
+
+}
+
 // IsPendingForGTE - Test if this tx has been in pending pool
 // for more than or equal to `X` time unit
 func (m *MemPoolTx) IsPendingForGTE(x time.Duration) bool {
