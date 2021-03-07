@@ -63,6 +63,22 @@ func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
 }
 
+// TopXWithLowGasPrice - Returns only top `X` tx(s) present in pending mempool,
+// where being top is determined by how low gas price paid by tx sender
+func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
+
+	txs := MemPoolTxsAsc(p.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
+	sort.Sort(&txs)
+
+	return txs[:x]
+
+}
+
 // SentFrom - Returns a list of pending tx(s) sent from
 // specified address
 func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {

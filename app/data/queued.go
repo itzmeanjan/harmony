@@ -67,6 +67,22 @@ func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
 }
 
+// TopXWithLowGasPrice - Returns only top `X` tx(s) present in queued mempool,
+// where being top is determined by how low gas price paid by tx sender
+func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
+
+	txs := MemPoolTxsAsc(q.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
+	sort.Sort(&txs)
+
+	return txs[:x]
+
+}
+
 // SentFrom - Returns a list of queued tx(s) sent from
 // specified address
 func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
