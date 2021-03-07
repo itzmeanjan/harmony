@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -31,6 +32,33 @@ func (q *QueuedPool) Count() uint64 {
 	defer q.Lock.RUnlock()
 
 	return uint64(len(q.Transactions))
+
+}
+
+// ListTxs - Returns all tx(s) present in queued pool, as slice
+func (q *QueuedPool) ListTxs() []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, v := range q.Transactions {
+		result = append(result, v)
+	}
+
+	return result
+
+}
+
+// TopXWithHighGasPrice - Returns only top `X` tx(s) present in queued mempool,
+// where being top is determined by how much gas price paid by tx sender
+func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
+
+	txs := MemPoolTxs(q.ListTxs())
+	sort.Sort(&txs)
+
+	return txs[:x]
 
 }
 

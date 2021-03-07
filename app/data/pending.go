@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -46,11 +47,14 @@ func (p *PendingPool) ListTxs() []*MemPoolTx {
 
 }
 
-// TopXWithHighGasPrice - Returns only top `X` tx(s) present in mempool,
+// TopXWithHighGasPrice - Returns only top `X` tx(s) present in pending mempool,
 // where being top is determined by how much gas price paid by tx sender
 func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
-	return p.ListTxs()[:x]
+	txs := MemPoolTxs(p.ListTxs())
+	sort.Sort(&txs)
+
+	return txs[:x]
 
 }
 
