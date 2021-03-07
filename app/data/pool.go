@@ -80,15 +80,27 @@ func (m *MemPool) QueuedTo(address common.Address) []*MemPoolTx {
 }
 
 // TopXPendingWithHighGasPrice - Returns a list of top `X` pending tx(s)
-// where high gas price is paid by tx sender
+// where high gas price tx(s) are prioritized
 func (m *MemPool) TopXPendingWithHighGasPrice(x uint64) []*MemPoolTx {
 	return m.Pending.TopXWithHighGasPrice(x)
 }
 
 // TopXQueuedWithHighGasPrice - Returns a list of top `X` queued tx(s)
-// where high gas price is paid by tx sender
+// where high gas price tx(s) are prioritized
 func (m *MemPool) TopXQueuedWithHighGasPrice(x uint64) []*MemPoolTx {
 	return m.Queued.TopXWithHighGasPrice(x)
+}
+
+// TopXPendingWithLowGasPrice - Returns a list of top `X` pending tx(s)
+// where low gas price tx(s) are prioritized
+func (m *MemPool) TopXPendingWithLowGasPrice(x uint64) []*MemPoolTx {
+	return m.Pending.TopXWithLowGasPrice(x)
+}
+
+// TopXQueuedWithLowGasPrice - Returns a list of top `X` queued tx(s)
+// where low gas price tx(s) are prioritized
+func (m *MemPool) TopXQueuedWithLowGasPrice(x uint64) []*MemPoolTx {
+	return m.Queued.TopXWithLowGasPrice(x)
 }
 
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
