@@ -34,6 +34,48 @@ func (q *QueuedPool) Count() uint64 {
 
 }
 
+// SentFrom - Returns a list of queued tx(s) sent from
+// specified address
+func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsSentFrom(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// SentTo - Returns a list of queued tx(s) sent to
+// specified address
+func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsSentTo(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
 // OlderThanX - Returns a list of all queued tx(s), which are
 // living in mempool for more than or equals to `X` time unit
 func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
