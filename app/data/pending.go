@@ -51,7 +51,7 @@ func (p *PendingPool) ListTxs() []*MemPoolTx {
 // where being top is determined by how much gas price paid by tx sender
 func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
-	txs := MemPoolTxs(p.ListTxs())
+	txs := MemPoolTxsDesc(p.ListTxs())
 
 	if len(txs) == 0 {
 		return txs

@@ -12,19 +12,19 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// MemPoolTxs - List of mempool tx(s)
+// MemPoolTxsDesc - List of mempool tx(s)
 //
 // @note This structure to be used for sorting tx(s)
-// using gas price they're paying
-type MemPoolTxs []*MemPoolTx
+// in descending way, using gas price they're paying
+type MemPoolTxsDesc []*MemPoolTx
 
 // Len - Count of tx(s) present in mempool
-func (m *MemPoolTxs) Len() int {
+func (m *MemPoolTxsDesc) Len() int {
 	return len(*m)
 }
 
 // Swap - Swap two tx(s), given their index in slice
-func (m *MemPoolTxs) Swap(i, j int) {
+func (m *MemPoolTxsDesc) Swap(i, j int) {
 
 	(*m)[i], (*m)[j] = (*m)[j], (*m)[i]
 
@@ -32,9 +32,35 @@ func (m *MemPoolTxs) Swap(i, j int) {
 
 // Less - Actual sorting logic i.e. higher gas price
 // tx gets prioritized
-func (m *MemPoolTxs) Less(i, j int) bool {
+func (m *MemPoolTxsDesc) Less(i, j int) bool {
 
 	return BigHexToBigDecimal((*m)[i].GasPrice).Cmp(BigHexToBigDecimal((*m)[j].GasPrice)) >= 0
+
+}
+
+// MemPoolTxsAsc - List of mempool tx(s)
+//
+// @note This structure to be used for sorting tx(s)
+// in ascending way, using gas price they're paying
+type MemPoolTxsAsc []*MemPoolTx
+
+// Len - Count of tx(s) present in mempool
+func (m *MemPoolTxsAsc) Len() int {
+	return len(*m)
+}
+
+// Swap - Swap two tx(s), given their index in slice
+func (m *MemPoolTxsAsc) Swap(i, j int) {
+
+	(*m)[i], (*m)[j] = (*m)[j], (*m)[i]
+
+}
+
+// Less - Actual sorting logic i.e. lower gas price
+// tx gets prioritized
+func (m *MemPoolTxsAsc) Less(i, j int) bool {
+
+	return BigHexToBigDecimal((*m)[i].GasPrice).Cmp(BigHexToBigDecimal((*m)[j].GasPrice)) <= 0
 
 }
 

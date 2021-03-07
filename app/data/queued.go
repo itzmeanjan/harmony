@@ -55,7 +55,7 @@ func (q *QueuedPool) ListTxs() []*MemPoolTx {
 // where being top is determined by how much gas price paid by tx sender
 func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
-	txs := MemPoolTxs(q.ListTxs())
+	txs := MemPoolTxsDesc(q.ListTxs())
 
 	if len(txs) == 0 {
 		return txs
