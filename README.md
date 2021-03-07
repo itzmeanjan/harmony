@@ -202,6 +202,66 @@ query {
 }
 ```
 
+---
+
+For getting a list of all pending tx(s) `from` specific address, send a graphQL query like 👇
+
+> Note : More than one pending tx from same address, denotes those are same nonce tx(s).
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  pendingFrom(addr: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+For getting a list of all pending tx(s) sent `to` specific address, you can send a graphQL query like 👇
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  pendingTo(addr: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
 ### Queued Pool
 
 For listing all tx(s) queued for more than or equals to `x` time unit, send graphQL query
@@ -244,6 +304,66 @@ URL : **/v1/graphql**
 ```graphql
 query {
   queuedForLessThan(x: "1m10s100ms") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+For getting a list of all queued tx(s) `from` specific address, send a graphQL query like 👇
+
+> Note : These are present in queued pool due to nonce gap in sender's address i.e. there must be some tx with lower nonce present in pending pool & until that one gets mined, these tx(s) in queued pool, will not move into pending pool.
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  queuedFrom(addr: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+For getting a list of all queued tx(s) sent `to` specific address, you can send a graphQL query like 👇
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  queuedTo(addr: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313") {
     from
   	gas
   	gasPrice
