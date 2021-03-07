@@ -27,4 +27,7 @@ type Query {
 
   queuedFrom(addr: String!): [MemPoolTx!]!
   queuedTo(addr: String!): [MemPoolTx!]!
+
+  topXPendingWithHighGasPrice(x: Int!): [MemPoolTx!]!
+  topXQueuedWithHighGasPrice(x: Int!): [MemPoolTx!]!
 }
