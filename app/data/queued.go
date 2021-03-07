@@ -56,6 +56,11 @@ func (q *QueuedPool) ListTxs() []*MemPoolTx {
 func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
 	txs := MemPoolTxs(q.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
 	sort.Sort(&txs)
 
 	return txs[:x]

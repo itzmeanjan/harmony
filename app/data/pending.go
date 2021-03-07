@@ -52,6 +52,11 @@ func (p *PendingPool) ListTxs() []*MemPoolTx {
 func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
 	txs := MemPoolTxs(p.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
 	sort.Sort(&txs)
 
 	return txs[:x]

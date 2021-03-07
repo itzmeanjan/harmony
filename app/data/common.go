@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 
@@ -63,9 +64,12 @@ func BigHexToBigDecimal(num *hexutil.Big) *big.Int {
 
 }
 
-// BigHexToDecimal - Converts hex encoded big number to decimal string
+// BigHexToDecimal - Converts hex encoded big number to Gas Price in Gwei form
 func BigHexToDecimal(num *hexutil.Big) string {
 
-	return BigHexToBigDecimal(num).String()
+	_res := big.NewInt(0)
+	_res.Div(BigHexToBigDecimal(num), big.NewInt(1_000_000_000))
+
+	return fmt.Sprintf("%s Gwei", _res.String())
 
 }
