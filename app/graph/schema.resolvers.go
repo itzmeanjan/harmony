@@ -116,6 +116,26 @@ func (r *queryResolver) TopXQueuedWithHighGasPrice(ctx context.Context, x int) (
 
 }
 
+func (r *queryResolver) TopXPendingWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
+
+	if x <= 0 {
+		return nil, errors.New("Bad argument")
+	}
+
+	return toGraphQL(memPool.TopXPendingWithLowGasPrice(uint64(x))), nil
+
+}
+
+func (r *queryResolver) TopXQueuedWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
+
+	if x <= 0 {
+		return nil, errors.New("Bad argument")
+	}
+
+	return toGraphQL(memPool.TopXQueuedWithLowGasPrice(uint64(x))), nil
+
+}
+
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 

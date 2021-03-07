@@ -30,4 +30,7 @@ type Query {
 
   topXPendingWithHighGasPrice(x: Int!): [MemPoolTx!]!
   topXQueuedWithHighGasPrice(x: Int!): [MemPoolTx!]!
+
+  topXPendingWithLowGasPrice(x: Int!): [MemPoolTx!]!
+  topXQueuedWithLowGasPrice(x: Int!): [MemPoolTx!]!
 }
