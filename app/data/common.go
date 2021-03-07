@@ -52,12 +52,20 @@ func HexToDecimal(num hexutil.Uint64) string {
 
 }
 
-// BigHexToDecimal - Converts hex encoded big number to decimal string
-func BigHexToDecimal(num *hexutil.Big) string {
+// BigHexToBigDecimal - Given a hex encoded big number, converts it to
+// decimal big integer
+func BigHexToBigDecimal(num *hexutil.Big) *big.Int {
 
 	_num := big.NewInt(0)
 	_num.SetString(remove0x(num.String()), 16)
 
-	return _num.String()
+	return _num
+
+}
+
+// BigHexToDecimal - Converts hex encoded big number to decimal string
+func BigHexToDecimal(num *hexutil.Big) string {
+
+	return BigHexToBigDecimal(num).String()
 
 }

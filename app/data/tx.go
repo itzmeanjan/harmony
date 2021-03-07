@@ -12,6 +12,32 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
+// MemPoolTxs - List of mempool tx(s)
+//
+// @note This structure to be used for sorting tx(s)
+// using gas price they're paying
+type MemPoolTxs []*MemPoolTx
+
+// Len - Count of tx(s) present in mempool
+func (m *MemPoolTxs) Len() int {
+	return len(*m)
+}
+
+// Swap - Swap two tx(s), given their index in slice
+func (m *MemPoolTxs) Swap(i, j int) {
+
+	(*m)[i], (*m)[j] = (*m)[j], (*m)[i]
+
+}
+
+// Less - Actual sorting logic i.e. higher gas price
+// tx gets prioritized
+func (m *MemPoolTxs) Less(i, j int) bool {
+
+	return BigHexToBigDecimal((*m)[i].GasPrice).Cmp(BigHexToBigDecimal((*m)[j].GasPrice)) >= 0
+
+}
+
 // MemPoolTx - This is how tx is placed in mempool, after performing
 // RPC call for fetching currently pending/ queued tx(s) in mempool
 // it'll be destructured into this format, for further computation
