@@ -30,6 +30,48 @@ func (p *PendingPool) Count() uint64 {
 
 }
 
+// SentFrom - Returns a list of pending tx(s) sent from
+// specified address
+func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsSentFrom(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// SentTo - Returns a list of pending tx(s) sent to
+// specified address
+func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsSentTo(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
 // OlderThanX - Returns a list of all pending tx(s), which are
 // living in mempool for more than or equals to `X` time unit
 func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
