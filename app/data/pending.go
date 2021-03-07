@@ -30,6 +30,30 @@ func (p *PendingPool) Count() uint64 {
 
 }
 
+// ListTxs - Returns all tx(s) present in pending pool, as slice
+func (p *PendingPool) ListTxs() []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, v := range p.Transactions {
+		result = append(result, v)
+	}
+
+	return result
+
+}
+
+// TopXWithHighGasPrice - Returns only top `X` tx(s) present in mempool,
+// where being top is determined by how much gas price paid by tx sender
+func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
+
+	return p.ListTxs()[:x]
+
+}
+
 // SentFrom - Returns a list of pending tx(s) sent from
 // specified address
 func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
