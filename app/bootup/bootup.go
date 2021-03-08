@@ -106,6 +106,10 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	// Passing parent context to graphQL subscribers, so that
+	// graceful system shutdown can be performed
+	graph.InitParentContext(ctx)
+
 	return &data.Resource{
 		RPCClient: client,
 		Pool:      pool,

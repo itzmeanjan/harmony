@@ -15,6 +15,7 @@ import (
 
 var memPool *data.MemPool
 var redisClient *redis.Client
+var parentCtx context.Context
 
 // InitMemPool - Initializing mempool handle, in this module
 // so that it can be used before responding back to graphql queries
@@ -40,6 +41,12 @@ func InitRedisClient(client *redis.Client) error {
 
 	return errors.New("Bad redis client received in graphQL handler")
 
+}
+
+// InitParentContext - Initializing parent context, to be listened by all
+// graphQL subscribers so that graceful shutdown can be done
+func InitParentContext(ctx context.Context) {
+	parentCtx = ctx
 }
 
 // Given a list of mempool tx(s), convert them to
@@ -133,12 +140,20 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, c
 
 			select {
 
+			case <-parentCtx.Done():
+
+				// Denotes `harmony` is being shutdown
+				//
+				// We must unsubscribe & get out of this infinite loop
+				UnsubscribeFromTopic(context.Background(), pubsub, topic)
+				break OUTER
+
 			case <-ctx.Done():
 
 				// Denotes client is not active anymore
 				//
 				// We must unsubscribe & get out of this infinite loop
-				UnsubscribeFromTopic(ctx, pubsub, topic)
+				UnsubscribeFromTopic(context.Background(), pubsub, topic)
 				break OUTER
 
 			case <-time.After(time.Millisecond * time.Duration(300)):
