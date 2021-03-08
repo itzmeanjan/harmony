@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph/model"
 )
@@ -97,5 +98,21 @@ func SubscribeToTopic(ctx context.Context, topic string) (*redis.PubSub, error) 
 	}
 
 	return _pubsub, nil
+
+}
+
+// SubscribeToPendingTxEntry - Subscribe to topic where new pending tx(s)
+// are published
+func SubscribeToPendingTxEntry(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetPendingTxEntryPublishTopic())
+
+}
+
+// SubscribeToQueuedTxEntry - Subscribe to topic where new queued tx(s)
+// are published
+func SubscribeToQueuedTxEntry(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic())
 
 }
