@@ -27,6 +27,13 @@ func Start(ctx context.Context, res *data.Resource) {
 			Format: "${time_rfc3339} [📩] ${method} | ${uri} | ${status} | ${remote_ip} | ${latency_human}\n",
 		}))
 
+	router.Use(middleware.CORSWithConfig(
+		middleware.CORSConfig{
+			Skipper:      middleware.DefaultSkipper,
+			AllowOrigins: []string{"*"},
+			AllowMethods: []string{http.MethodGet, http.MethodPost},
+		}))
+
 	v1 := router.Group("/v1")
 
 	graphql := handler.NewDefaultServer(generated.NewExecutableSchema(
