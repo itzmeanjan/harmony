@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/graph/generated"
 	"github.com/itzmeanjan/harmony/app/graph/model"
 )
@@ -145,7 +146,7 @@ func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.
 
 	comm := make(chan *model.MemPoolTx, 1)
 
-	go ListenToMessages(ctx, _pubsub, comm)
+	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm)
 
 	return comm, nil
 
@@ -160,7 +161,7 @@ func (r *subscriptionResolver) NewQueuedTx(ctx context.Context) (<-chan *model.M
 
 	comm := make(chan *model.MemPoolTx, 1)
 
-	go ListenToMessages(ctx, _pubsub, comm)
+	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm)
 
 	return comm, nil
 

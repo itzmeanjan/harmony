@@ -76,7 +76,7 @@ func checkAddress(address string) bool {
 	reg, err := regexp.Compile(`^(0x\w{40})$`)
 	if err != nil {
 
-		log.Printf("[!] Failed to compile regular expression : %s\n", err.Error())
+		log.Printf("[❗️] Failed to compile regular expression : %s\n", err.Error())
 		return false
 
 	}
@@ -121,42 +121,77 @@ func SubscribeToQueuedTxEntry(ctx context.Context) (*redis.PubSub, error) {
 // on topic to which graphQL client has subscribed to over websocket transport
 //
 // This can be run as a seperate go routine
-func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, comm chan<- *model.MemPoolTx) {
+func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, comm chan<- *model.MemPoolTx) {
+
+	defer func() {
+		close(comm)
+	}()
 
 	{
 	OUTER:
 		for {
 
-			msg, err := pubsub.ReceiveTimeout(ctx, time.Second)
-			if err != nil {
-				continue
-			}
+			select {
 
-			switch m := msg.(type) {
+			case <-ctx.Done():
 
-			case *redis.Subscription:
-
-				// Pubsub broker informed we've been unsubscribed from
-				// this topic
+				// Denotes client is not active anymore
 				//
-				// It's better to leave this infinite loop
-				if m.Kind == "unsubscribe" {
-					break OUTER
+				// We must unsubscribe & get out of this infinite loop
+				UnsubscribeFromTopic(ctx, pubsub, topic)
+				break OUTER
+
+			case <-time.After(time.Millisecond * time.Duration(300)):
+				// If client is still active, we'll reach here in
+				// 1 ms & continue to read message published, if any
+
+				msg, err := pubsub.ReceiveTimeout(ctx, time.Microsecond*time.Duration(100))
+				if err != nil {
+					continue
 				}
 
-			case *redis.Message:
+				switch m := msg.(type) {
 
-				// New message has been published on topic
-				// of our interest, we'll attempt to deserialize
-				// data to deliver it to client in expected format
-				message := UnmarshalPubSubMessage([]byte(m.Payload))
-				if message != nil {
-					comm <- message.ToGraphQL()
+				case *redis.Subscription:
+
+					// Pubsub broker informed we've been unsubscribed from
+					// this topic
+					//
+					// It's better to leave this infinite loop
+					if m.Kind == "unsubscribe" {
+						break OUTER
+					}
+
+				case *redis.Message:
+
+					// New message has been published on topic
+					// of our interest, we'll attempt to deserialize
+					// data to deliver it to client in expected format
+					message := UnmarshalPubSubMessage([]byte(m.Payload))
+					if message != nil {
+						comm <- message.ToGraphQL()
+					}
+
+				default:
+					// @note Doing nothing yet
+
 				}
 
 			}
 
 		}
+	}
+
+}
+
+// UnsubscribeFromTopic - Given topic name to which client is already subscribed to,
+// attempts to unsubscribe from
+func UnsubscribeFromTopic(ctx context.Context, pubsub *redis.PubSub, topic string) {
+
+	if err := pubsub.Unsubscribe(ctx, topic); err != nil {
+
+		log.Printf("[❗️] Failed to unsubscribe from Redis pubsub : %s\n", err.Error())
+
 	}
 
 }
