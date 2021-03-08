@@ -1,6 +1,7 @@
 package data
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -64,11 +65,45 @@ func BigHexToBigDecimal(num *hexutil.Big) *big.Int {
 
 }
 
-// BigHexToDecimal - Converts hex encoded big number to Gas Price in Gwei form
-func BigHexToDecimal(num *hexutil.Big) string {
+// BigIntToBigFloat - Given big number, attempts to convert it to
+// big floating point number
+func BigIntToBigFloat(num *big.Int) (*big.Float, error) {
 
-	_res := big.NewInt(0)
-	_res.Div(BigHexToBigDecimal(num), big.NewInt(1_000_000_000))
+	_res := big.NewFloat(0)
+
+	if _, ok := _res.SetString(num.String()); !ok {
+		return nil, errors.New("Failed to convert big int to big float")
+	}
+
+	return _res, nil
+
+}
+
+// BigHexToBigFloat - Converts hex encoded big integer to big floating point number
+//
+// @note To be used for better precision flaoting point arithmetic
+func BigHexToBigFloat(num *hexutil.Big) (*big.Float, error) {
+
+	return BigIntToBigFloat(BigHexToBigDecimal(num))
+
+}
+
+// HumanReadableGasPrice - Returns gas price paid for tx
+// in Gwei unit
+func HumanReadableGasPrice(num *hexutil.Big) string {
+
+	_num, err := BigHexToBigFloat(num)
+	if err != nil {
+		return "0 Gwei"
+	}
+
+	_den, err := BigIntToBigFloat(big.NewInt(1_000_000_000))
+	if err != nil {
+		return "0 Gwei"
+	}
+
+	_res := big.NewFloat(0)
+	_res.Quo(_num, _den)
 
 	return fmt.Sprintf("%s Gwei", _res.String())
 

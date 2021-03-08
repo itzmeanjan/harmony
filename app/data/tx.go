@@ -261,15 +261,15 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 	}
 
 	if m.GasPrice != nil {
-		gqlTx.GasPrice = BigHexToDecimal(m.GasPrice)
+		gqlTx.GasPrice = HumanReadableGasPrice(m.GasPrice)
 	} else {
 		gqlTx.GasPrice = "0"
 	}
 
 	if m.Value != nil {
-		gqlTx.Value = m.Value.String()
+		gqlTx.Value = BigHexToBigDecimal(m.Value).String()
 	} else {
-		gqlTx.Value = "0x"
+		gqlTx.Value = "0"
 	}
 
 	if m.V != nil {
