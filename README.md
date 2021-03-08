@@ -262,6 +262,64 @@ query {
 }
 ```
 
+---
+
+Top **X** pending transaction(s), with high gas price
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  topXPendingWithHighGasPrice(x: 10) {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+Top **X** pending transaction(s), with low gas price
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  topXPendingWithLowGasPrice(x: 10) {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
 ### Queued Pool
 
 For listing all tx(s) queued for more than or equals to `x` time unit, send graphQL query
@@ -364,6 +422,64 @@ URL : **/v1/graphql**
 ```graphql
 query {
   queuedTo(addr: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313") {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+Top **X** queued transaction(s), with high gas price
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  topXQueuedWithHighGasPrice(x: 10) {
+    from
+  	gas
+  	gasPrice
+  	hash
+  	input
+  	nonce
+  	to
+  	value
+  	v
+  	r
+  	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+Top **X** queued transaction(s), with low gas price
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  topXQueuedWithLowGasPrice(x: 10) {
     from
   	gas
   	gasPrice
