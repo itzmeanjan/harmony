@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"errors"
 	"log"
 	"regexp"
@@ -80,5 +81,21 @@ func checkAddress(address string) bool {
 	}
 
 	return reg.MatchString(address)
+
+}
+
+// SubscribeToTopic - Subscribes to Redis topic, with context of caller
+// while waiting for subscription confirmation
+func SubscribeToTopic(ctx context.Context, topic string) (*redis.PubSub, error) {
+
+	_pubsub := redisClient.Subscribe(ctx, topic)
+
+	// Waiting for subscription confirmation
+	_, err := _pubsub.Receive(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return _pubsub, nil
 
 }
