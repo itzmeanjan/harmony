@@ -21,6 +21,11 @@ func Get(key string) string {
 	return viper.GetString(key)
 }
 
+// GetUint - Parses value as uint64 & returns response
+func GetUint(key string) uint64 {
+	return viper.GetUint64(key)
+}
+
 // GetFloat - Parse confiig value as floating point number & return
 func GetFloat(key string) float64 {
 	return viper.GetFloat64(key)
@@ -134,5 +139,18 @@ func GetConcurrencyFactor() int {
 	}
 
 	return f
+
+}
+
+// GetPortNumber - Attempts to read user preferred port number
+// for running harmony as a service, if failing/ port lesser than 1024
+// uses default value `7000`
+func GetPortNumber() uint64 {
+
+	if port := GetUint("Port"); port > 1024 {
+		return port
+	}
+
+	return 7000
 
 }

@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -27,6 +28,138 @@ func (p *PendingPool) Count() uint64 {
 	defer p.Lock.RUnlock()
 
 	return uint64(len(p.Transactions))
+
+}
+
+// ListTxs - Returns all tx(s) present in pending pool, as slice
+func (p *PendingPool) ListTxs() []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, v := range p.Transactions {
+		result = append(result, v)
+	}
+
+	return result
+
+}
+
+// TopXWithHighGasPrice - Returns only top `X` tx(s) present in pending mempool,
+// where being top is determined by how much gas price paid by tx sender
+func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
+
+	txs := MemPoolTxsDesc(p.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
+	sort.Sort(&txs)
+
+	return txs[:x]
+
+}
+
+// TopXWithLowGasPrice - Returns only top `X` tx(s) present in pending mempool,
+// where being top is determined by how low gas price paid by tx sender
+func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
+
+	txs := MemPoolTxsAsc(p.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
+	sort.Sort(&txs)
+
+	return txs[:x]
+
+}
+
+// SentFrom - Returns a list of pending tx(s) sent from
+// specified address
+func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsSentFrom(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// SentTo - Returns a list of pending tx(s) sent to
+// specified address
+func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsSentTo(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// OlderThanX - Returns a list of all pending tx(s), which are
+// living in mempool for more than or equals to `X` time unit
+func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsPendingForGTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// FresherThanX - Returns a list of all pending tx(s), which are
+// living in mempool for less than or equals to `X` time unit
+func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(p.Transactions))
+
+	for _, tx := range p.Transactions {
+
+		if tx.IsPendingForLTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
 
 }
 
@@ -148,6 +281,16 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 		func(tx *MemPoolTx) {
 
 			wp.Submit(func() {
+
+				// If this pending tx is present in current
+				// pending pool state obtained, no need
+				// check whether tx is confirmed or not
+				if IsPresentInCurrentPool(txs, tx.Hash) {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					return
+
+				}
 
 				// Checking whether this nonce is used
 				// in any mined tx ( including this )

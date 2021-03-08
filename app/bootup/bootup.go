@@ -2,14 +2,35 @@ package bootup
 
 import (
 	"context"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
+	"github.com/itzmeanjan/harmony/app/graph"
 )
+
+// GetNetwork - Make RPC call for reading network ID
+func GetNetwork(ctx context.Context, rpc *rpc.Client) (uint64, error) {
+
+	var result string
+
+	if err := rpc.CallContext(ctx, &result, "net_version"); err != nil {
+		return 0, err
+	}
+
+	_result, err := strconv.ParseUint(result, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return _result, nil
+
+}
 
 // SetGround - This is to be called when starting application
 // for doing basic ground work(s), so that all required resources
@@ -56,18 +77,33 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	// Attempt to read current network ID
+	network, err := GetNetwork(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	pool := &data.MemPool{
+		Pending: &data.PendingPool{
+			Transactions: make(map[common.Hash]*data.MemPoolTx),
+			Lock:         &sync.RWMutex{},
+		},
+		Queued: &data.QueuedPool{
+			Transactions: make(map[common.Hash]*data.MemPoolTx),
+			Lock:         &sync.RWMutex{},
+		},
+	}
+
+	// Passed this mempool handle to graphql query resolver
+	if err := graph.InitMemPool(pool); err != nil {
+		return nil, err
+	}
+
 	return &data.Resource{
 		RPCClient: client,
-		Pool: &data.MemPool{
-			Pending: &data.PendingPool{
-				Transactions: make(map[common.Hash]*data.MemPoolTx),
-				Lock:         &sync.RWMutex{},
-			},
-			Queued: &data.QueuedPool{
-				Transactions: make(map[common.Hash]*data.MemPoolTx),
-				Lock:         &sync.RWMutex{},
-			},
-		},
-		Redis: _redis}, nil
+		Pool:      pool,
+		Redis:     _redis,
+		StartedAt: time.Now().UTC(),
+		NetworkID: network}, nil
 
 }

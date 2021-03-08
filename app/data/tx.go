@@ -7,9 +7,62 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/itzmeanjan/harmony/app/graph/model"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
+
+// MemPoolTxsDesc - List of mempool tx(s)
+//
+// @note This structure to be used for sorting tx(s)
+// in descending way, using gas price they're paying
+type MemPoolTxsDesc []*MemPoolTx
+
+// Len - Count of tx(s) present in mempool
+func (m *MemPoolTxsDesc) Len() int {
+	return len(*m)
+}
+
+// Swap - Swap two tx(s), given their index in slice
+func (m *MemPoolTxsDesc) Swap(i, j int) {
+
+	(*m)[i], (*m)[j] = (*m)[j], (*m)[i]
+
+}
+
+// Less - Actual sorting logic i.e. higher gas price
+// tx gets prioritized
+func (m *MemPoolTxsDesc) Less(i, j int) bool {
+
+	return BigHexToBigDecimal((*m)[i].GasPrice).Cmp(BigHexToBigDecimal((*m)[j].GasPrice)) >= 0
+
+}
+
+// MemPoolTxsAsc - List of mempool tx(s)
+//
+// @note This structure to be used for sorting tx(s)
+// in ascending way, using gas price they're paying
+type MemPoolTxsAsc []*MemPoolTx
+
+// Len - Count of tx(s) present in mempool
+func (m *MemPoolTxsAsc) Len() int {
+	return len(*m)
+}
+
+// Swap - Swap two tx(s), given their index in slice
+func (m *MemPoolTxsAsc) Swap(i, j int) {
+
+	(*m)[i], (*m)[j] = (*m)[j], (*m)[i]
+
+}
+
+// Less - Actual sorting logic i.e. lower gas price
+// tx gets prioritized
+func (m *MemPoolTxsAsc) Less(i, j int) bool {
+
+	return BigHexToBigDecimal((*m)[i].GasPrice).Cmp(BigHexToBigDecimal((*m)[j].GasPrice)) <= 0
+
+}
 
 // MemPoolTx - This is how tx is placed in mempool, after performing
 // RPC call for fetching currently pending/ queued tx(s) in mempool
@@ -34,6 +87,75 @@ type MemPoolTx struct {
 	PendingFrom      time.Time
 	QueuedAt         time.Time
 	Pool             string
+}
+
+// IsSentFrom - Checks whether this tx was sent from specified address
+// or not
+func (m *MemPoolTx) IsSentFrom(address common.Address) bool {
+
+	return m.From == address
+
+}
+
+// IsSentTo - Checks if this was sent to certain address ( EOA/ Contract )
+//
+// @note If it's a contract creation tx, it'll not have `to` address
+func (m *MemPoolTx) IsSentTo(address common.Address) bool {
+
+	if m.To == nil {
+		return false
+	}
+
+	return *m.To == address
+
+}
+
+// IsPendingForGTE - Test if this tx has been in pending pool
+// for more than or equal to `X` time unit
+func (m *MemPoolTx) IsPendingForGTE(x time.Duration) bool {
+
+	if m.Pool != "pending" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.PendingFrom) >= x
+
+}
+
+// IsPendingForLTE - Test if this tx has been in pending pool
+// for less than or equal to `X` time unit
+func (m *MemPoolTx) IsPendingForLTE(x time.Duration) bool {
+
+	if m.Pool != "pending" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.PendingFrom) <= x
+
+}
+
+// IsQueuedForGTE - Test if this tx has been in queued pool
+// for more than or equal to `X` time unit
+func (m *MemPoolTx) IsQueuedForGTE(x time.Duration) bool {
+
+	if m.Pool != "queued" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.QueuedAt) >= x
+
+}
+
+// IsQueuedForLTE - Test if this tx has been in queued pool
+// for less than or equal to `X` time unit
+func (m *MemPoolTx) IsQueuedForLTE(x time.Duration) bool {
+
+	if m.Pool != "queued" {
+		return false
+	}
+
+	return time.Now().UTC().Sub(m.QueuedAt) <= x
+
 }
 
 // IsNonceExhausted - Multiple tx(s) of same/ different value
@@ -90,6 +212,85 @@ func FromMessagePack(data []byte) (*MemPoolTx, error) {
 	}
 
 	return tx, nil
+
+}
+
+// ToGraphQL - Convert to graphql compatible type
+func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
+
+	var gqlTx *model.MemPoolTx
+
+	switch m.Pool {
+
+	case "pending":
+
+		gqlTx = &model.MemPoolTx{
+			From:       m.From.Hex(),
+			Gas:        HexToDecimal(m.Gas),
+			Hash:       m.Hash.Hex(),
+			Input:      m.Input.String(),
+			Nonce:      HexToDecimal(m.Nonce),
+			PendingFor: time.Now().UTC().Sub(m.PendingFrom).String(),
+			QueuedFor:  "0 s",
+			Pool:       m.Pool,
+		}
+
+		if !m.QueuedAt.Equal(time.Time{}) {
+			gqlTx.QueuedFor = m.PendingFrom.Sub(m.QueuedAt).String()
+		}
+
+	case "queued":
+
+		gqlTx = &model.MemPoolTx{
+			From:       m.From.Hex(),
+			Gas:        HexToDecimal(m.Gas),
+			Hash:       m.Hash.Hex(),
+			Input:      m.Input.String(),
+			Nonce:      HexToDecimal(m.Nonce),
+			PendingFor: "0 s",
+			QueuedFor:  time.Now().UTC().Sub(m.PendingFrom).String(),
+			Pool:       m.Pool,
+		}
+
+	}
+
+	if m.To != nil {
+		gqlTx.To = m.To.Hex()
+	} else {
+		gqlTx.To = "0x"
+	}
+
+	if m.GasPrice != nil {
+		gqlTx.GasPrice = HumanReadableGasPrice(m.GasPrice)
+	} else {
+		gqlTx.GasPrice = "0"
+	}
+
+	if m.Value != nil {
+		gqlTx.Value = BigHexToBigDecimal(m.Value).String()
+	} else {
+		gqlTx.Value = "0"
+	}
+
+	if m.V != nil {
+		gqlTx.V = m.V.String()
+	} else {
+		gqlTx.V = "0x"
+	}
+
+	if m.R != nil {
+		gqlTx.R = m.R.String()
+	} else {
+		gqlTx.R = "0x"
+	}
+
+	if m.S != nil {
+		gqlTx.S = m.S.String()
+	} else {
+		gqlTx.S = "0x"
+	}
+
+	return gqlTx
 
 }
 

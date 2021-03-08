@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -31,6 +32,138 @@ func (q *QueuedPool) Count() uint64 {
 	defer q.Lock.RUnlock()
 
 	return uint64(len(q.Transactions))
+
+}
+
+// ListTxs - Returns all tx(s) present in queued pool, as slice
+func (q *QueuedPool) ListTxs() []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, v := range q.Transactions {
+		result = append(result, v)
+	}
+
+	return result
+
+}
+
+// TopXWithHighGasPrice - Returns only top `X` tx(s) present in queued mempool,
+// where being top is determined by how much gas price paid by tx sender
+func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
+
+	txs := MemPoolTxsDesc(q.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
+	sort.Sort(&txs)
+
+	return txs[:x]
+
+}
+
+// TopXWithLowGasPrice - Returns only top `X` tx(s) present in queued mempool,
+// where being top is determined by how low gas price paid by tx sender
+func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
+
+	txs := MemPoolTxsAsc(q.ListTxs())
+
+	if len(txs) == 0 {
+		return txs
+	}
+
+	sort.Sort(&txs)
+
+	return txs[:x]
+
+}
+
+// SentFrom - Returns a list of queued tx(s) sent from
+// specified address
+func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsSentFrom(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// SentTo - Returns a list of queued tx(s) sent to
+// specified address
+func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsSentTo(address) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// OlderThanX - Returns a list of all queued tx(s), which are
+// living in mempool for more than or equals to `X` time unit
+func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsQueuedForGTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
+
+}
+
+// FresherThanX - Returns a list of all queued tx(s), which are
+// living in mempool for less than or equals to `X` time unit
+func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	result := make([]*MemPoolTx, 0, len(q.Transactions))
+
+	for _, tx := range q.Transactions {
+
+		if tx.IsQueuedForLTE(x) {
+			result = append(result, tx)
+		}
+
+	}
+
+	return result
 
 }
 
@@ -164,6 +297,30 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 
 			wp.Submit(func() {
 
+				// If this queued tx is present in current
+				// queued pool state obtained from RPC node, no need
+				// check whether tx is unstuck or not
+				//
+				// @note Because it's definitely not unstuck
+				if IsPresentInCurrentPool(queued, tx.Hash) {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					return
+
+				}
+
+				// Now checking if tx has been moved to pending pool
+				// or not, if yes, we can consider this tx is unstuck
+				// it must be moved out of queued pool
+				if IsPresentInCurrentPool(pending, tx.Hash) {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: true}
+					return
+
+				}
+
+				// Finally checking whether this tx is unstuck or not
+				// by doing nonce comparison
 				yes, err := tx.IsUnstuck(ctx, rpc)
 				if err != nil {
 
