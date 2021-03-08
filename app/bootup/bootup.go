@@ -77,6 +77,13 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	// Passed this redis client handle to graphql query resolver
+	//
+	// To be used when subscription requests are received from clients
+	if err := graph.InitRedisClient(_redis); err != nil {
+		return nil, err
+	}
+
 	// Attempt to read current network ID
 	network, err := GetNetwork(ctx, client)
 	if err != nil {

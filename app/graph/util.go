@@ -6,11 +6,13 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph/model"
 )
 
 var memPool *data.MemPool
+var redisClient *redis.Client
 
 // InitMemPool - Initializing mempool handle, in this module
 // so that it can be used before responding back to graphql queries
@@ -22,6 +24,19 @@ func InitMemPool(pool *data.MemPool) error {
 	}
 
 	return errors.New("Bad mempool received in graphQL handler")
+
+}
+
+// InitRedisClient - Initializing redis client handle, so that all
+// subscriptions can be done using this client
+func InitRedisClient(client *redis.Client) error {
+
+	if client != nil {
+		redisClient = client
+		return nil
+	}
+
+	return errors.New("Bad redis client received in graphQL handler")
 
 }
 
