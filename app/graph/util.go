@@ -157,8 +157,9 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, c
 				break OUTER
 
 			case <-time.After(time.Millisecond * time.Duration(300)):
+
 				// If client is still active, we'll reach here in
-				// 1 ms & continue to read message published, if any
+				// 300 ms & continue to read message published, if any
 
 				msg, err := pubsub.ReceiveTimeout(ctx, time.Microsecond*time.Duration(100))
 				if err != nil {
