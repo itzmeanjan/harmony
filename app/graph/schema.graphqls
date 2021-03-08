@@ -34,3 +34,8 @@ type Query {
   topXPendingWithLowGasPrice(x: Int!): [MemPoolTx!]!
   topXQueuedWithLowGasPrice(x: Int!): [MemPoolTx!]!
 }
+
+type Subscription {
+  newPendingTx: MemPoolTx!
+  newQueuedTx: MemPoolTx!
+}

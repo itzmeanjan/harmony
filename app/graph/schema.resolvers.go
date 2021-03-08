@@ -136,7 +136,41 @@ func (r *queryResolver) TopXQueuedWithLowGasPrice(ctx context.Context, x int) ([
 
 }
 
+func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+
+	_pubsub, err := SubscribeToPendingTxEntry(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	go ListenToMessages(ctx, _pubsub, comm)
+
+	return comm, nil
+
+}
+
+func (r *subscriptionResolver) NewQueuedTx(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+
+	_pubsub, err := SubscribeToQueuedTxEntry(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	go ListenToMessages(ctx, _pubsub, comm)
+
+	return comm, nil
+
+}
+
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
+// Subscription returns generated.SubscriptionResolver implementation.
+func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subscriptionResolver{r} }
+
 type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }
