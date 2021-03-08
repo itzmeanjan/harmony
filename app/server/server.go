@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -79,7 +80,22 @@ func Start(ctx context.Context, res *data.Resource) {
 
 		})
 
+		v1.GET("/graphql", func(c echo.Context) error {
+
+			if !c.IsWebSocket() {
+				return errors.New("Only websocket transport allowed")
+			}
+
+			graphql.ServeHTTP(c.Response().Writer, c.Request())
+			return nil
+
+		})
+
 		v1.POST("/graphql", func(c echo.Context) error {
+
+			if c.IsWebSocket() {
+				return errors.New("Only http transport allowed")
+			}
 
 			graphql.ServeHTTP(c.Response().Writer, c.Request())
 			return nil
@@ -88,7 +104,7 @@ func Start(ctx context.Context, res *data.Resource) {
 
 		v1.GET("/graphql-playground", func(c echo.Context) error {
 
-			gpg := playground.Handler("harmony", "/v1/graphql")
+			gpg := playground.Handler("harmony : Reduce Chaos in MemPool 😌", "/v1/graphql")
 
 			if gpg == nil {
 
