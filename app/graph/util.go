@@ -116,3 +116,60 @@ func SubscribeToQueuedTxEntry(ctx context.Context) (*redis.PubSub, error) {
 	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic())
 
 }
+
+// ListenToMessages - Attempts to listen to messages being published
+// on topic to which graphQL client has subscribed to over websocket transport
+//
+// This can be run as a seperate go routine
+func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, comm chan<- *model.MemPoolTx) {
+
+	{
+	OUTER:
+		for {
+
+			msg, err := pubsub.ReceiveTimeout(ctx, time.Second)
+			if err != nil {
+				continue
+			}
+
+			switch m := msg.(type) {
+
+			case *redis.Subscription:
+
+				// Pubsub broker informed we've been unsubscribed from
+				// this topic
+				//
+				// It's better to leave this infinite loop
+				if m.Kind == "unsubscribe" {
+					break OUTER
+				}
+
+			case *redis.Message:
+
+				// New message has been published on topic
+				// of our interest, we'll attempt to deserialize
+				// data to deliver it to client in expected format
+				message := UnmarshalPubSubMessage([]byte(m.Payload))
+				if message != nil {
+					comm <- message.ToGraphQL()
+				}
+
+			}
+
+		}
+	}
+
+}
+
+// UnmarshalPubSubMessage - Attempts to unmarshal message pack serialized
+// pubsub message as structured tx data, which is to be sent to subscriber
+func UnmarshalPubSubMessage(message []byte) *data.MemPoolTx {
+
+	_message, err := data.FromMessagePack(message)
+	if err != nil {
+		return nil
+	}
+
+	return _message
+
+}
