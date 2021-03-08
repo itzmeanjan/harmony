@@ -12,6 +12,7 @@ require (
 	github.com/gammazero/workerpool v1.1.1
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/go-redis/redis/v8 v8.7.0
+	github.com/gorilla/websocket v1.4.2
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/labstack/echo/v4 v4.2.0
 	github.com/magiconair/properties v1.8.4 // indirect

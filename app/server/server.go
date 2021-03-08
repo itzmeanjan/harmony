@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/gorilla/websocket"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph"
@@ -40,6 +42,22 @@ func Start(ctx context.Context, res *data.Resource) {
 		generated.Config{
 			Resolvers: &graph.Resolver{},
 		}))
+
+	// -- Allowed underlying network transports
+	// using which clients can talk to server
+	//
+	// 👇 to be used for answering queries
+	graphql.AddTransport(transport.POST{})
+	// 👇 to be used for subscription
+	graphql.AddTransport(transport.Websocket{
+		KeepAlivePingInterval: 10 * time.Second,
+		Upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
+	})
+	// -- Ends here
 
 	if graphql == nil {
 
