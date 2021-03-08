@@ -3,6 +3,17 @@ Reduce Chaos in MemPool 😌
 
 ![banner](./sc/banner.png)
 
+## Table of Contents
+
+- [Why did you write `harmony` ?](#motivation)
+- [What do I need to have for installing `harmony` ?](#prerequisite)
+- [How do I get `harmony` up & running ?](#installation)
+- [How do I interact with `harmony` ?](#usage)
+	- [Checking overall status of mempool](#status-of-memPool)
+	- [Inspecting tx(s) in pending pool](#pending-pool)
+	- [Inspecting tx(s) in queued pool](#queued-pool)
+- [Any easy to use test ground for API ?](#graphQL-playground)
+
 ## Motivation
 
 I discovered **Ethereum's MemPool is one of the least explored domains, but not really least important**. 
@@ -154,7 +165,7 @@ You'll receive response of form
       {
         "from": "0xdF0692E287A763e5c011cc96Ee402994c6Dd246E",
         "gas": "35743",
-        "gasPrice": "74000000000",
+        "gasPrice": "74 Gwei",
         "hash": "0x142f95b4615ad31d5435fb979a07405d50b70a2dab2707001cdb04853b75537e",
         "input": "0x22c67519000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000001e35",
         "nonce": "108",
