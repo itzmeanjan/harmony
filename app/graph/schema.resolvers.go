@@ -167,6 +167,36 @@ func (r *subscriptionResolver) NewQueuedTx(ctx context.Context) (<-chan *model.M
 
 }
 
+func (r *subscriptionResolver) NewConfirmedTx(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+
+	_pubsub, err := SubscribeToPendingTxExit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm)
+
+	return comm, nil
+
+}
+
+func (r *subscriptionResolver) NewUnstuckTx(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+
+	_pubsub, err := SubscribeToQueuedTxExit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm)
+
+	return comm, nil
+
+}
+
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 

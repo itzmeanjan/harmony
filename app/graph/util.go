@@ -124,6 +124,22 @@ func SubscribeToQueuedTxEntry(ctx context.Context) (*redis.PubSub, error) {
 
 }
 
+// SubscribeToPendingTxExit - Subscribe to topic where pending tx(s), getting
+// confirmed are published
+func SubscribeToPendingTxExit(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetPendingTxExitPublishTopic())
+
+}
+
+// SubscribeToQueuedTxExit - Subscribe to topic where queued tx(s), getting
+// unstuck are published
+func SubscribeToQueuedTxExit(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetQueuedTxExitPublishTopic())
+
+}
+
 // ListenToMessages - Attempts to listen to messages being published
 // on topic to which graphQL client has subscribed to over websocket transport
 //
