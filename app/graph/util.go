@@ -151,7 +151,7 @@ func SubscribeToQueuedTxExit(ctx context.Context) (*redis.PubSub, error) {
 //
 // You can always blindly return `true` in your `evaluationCriteria` function,
 // so that you get to receive any tx being published on topic of your interest
-func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, evaluationCriteria func(m *data.MemPoolTx) bool, comm chan<- *model.MemPoolTx) {
+func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
 
 	defer func() {
 		close(comm)
@@ -207,7 +207,7 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, e
 					// of our interest, we'll attempt to deserialize
 					// data to deliver it to client in expected format
 					message := UnmarshalPubSubMessage([]byte(m.Payload))
-					if message != nil && evaluationCriteria(message) {
+					if message != nil && pubCriteria(message, params) {
 						comm <- message.ToGraphQL()
 					}
 
@@ -246,13 +246,4 @@ func UnmarshalPubSubMessage(message []byte) *data.MemPoolTx {
 
 	return _message
 
-}
-
-// NoEvaluationCriteria - When you want to listen to
-// any tx being published on your topic of interest
-// simply pass this function to `ListenToMessages`
-// so that all criteria check always returns `true`
-// & graphQL client receives all tx(s)
-func NoEvaluationCriteria(*data.MemPoolTx) bool {
-	return true
 }

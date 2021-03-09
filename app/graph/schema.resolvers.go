@@ -148,7 +148,7 @@ func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.
 	comm := make(chan *model.MemPoolTx, 1)
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), NoEvaluationCriteria, comm)
+	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, NoCriteria)
 
 	return comm, nil
 
@@ -164,7 +164,7 @@ func (r *subscriptionResolver) NewQueuedTx(ctx context.Context) (<-chan *model.M
 	comm := make(chan *model.MemPoolTx, 1)
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), NoEvaluationCriteria, comm)
+	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, NoCriteria)
 
 	return comm, nil
 
@@ -180,7 +180,7 @@ func (r *subscriptionResolver) NewConfirmedTx(ctx context.Context) (<-chan *mode
 	comm := make(chan *model.MemPoolTx, 1)
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), NoEvaluationCriteria, comm)
+	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, NoCriteria)
 
 	return comm, nil
 
@@ -196,7 +196,7 @@ func (r *subscriptionResolver) NewUnstuckTx(ctx context.Context) (<-chan *model.
 	comm := make(chan *model.MemPoolTx, 1)
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), NoEvaluationCriteria, comm)
+	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, NoCriteria)
 
 	return comm, nil
 
