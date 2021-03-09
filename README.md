@@ -16,16 +16,16 @@ Reduce Chaos in MemPool 😌
 		- [Pending From Address `A`](#pending-from-A)
 		- [Pending To Address `A`](#pending-to-A)
 		- [Top `X` Pending Tx(s)](#top-X-pending)
-		- [New Pending Tx(s)](#new-pending-tx(s)) **[ WebSocket ]**
-		- [New Confirmed Tx(s)](#new-confirmed-tx(s)) **[ WebSocket ]**
+		- [New Pending Tx(s)](#new-pending-txs) **[ WebSocket ]**
+		- [New Confirmed Tx(s)](#new-confirmed-txs) **[ WebSocket ]**
 	- [Inspecting tx(s) in queued pool](#queued-pool)
 		- [Queued For >= `X`](#queued-for-more-than-X)
 		- [Queued For <= `X`](#queued-for-less-than-X)
 		- [Queued From Address `A`](#queued-from-A)
 		- [Queued To Address `A`](#queued-to-A)
 		- [Top `X` Queued Tx(s)](#top-X-queued)
-		- [New Queued Tx(s)](#new-queued-tx(s)) **[ WebSocket ]**
-		- [New Unstuck Tx(s)](#new-unstuck-tx(s)) **[ WebSocket ]**
+		- [New Queued Tx(s)](#new-queued-txs) **[ WebSocket ]**
+		- [New Unstuck Tx(s)](#new-unstuck-txs) **[ WebSocket ]**
 - [Any easy to use test ground for API ?](#graphQL-playground)
 
 ## Motivation
