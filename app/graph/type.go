@@ -1,6 +1,9 @@
 package graph
 
-import "github.com/itzmeanjan/harmony/app/data"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/itzmeanjan/harmony/app/data"
+)
 
 // PublishingCriteria - Message publishing criteria is expected
 // in this form, which is to be invoked, everytime new message
@@ -14,4 +17,31 @@ type PublishingCriteria func(*data.MemPoolTx, ...interface{}) bool
 // & graphQL client receives all tx(s)
 func NoCriteria(*data.MemPoolTx, ...interface{}) bool {
 	return true
+}
+
+// CheckFromAddress - Just checks from address of tx, so that client 
+// is only notified when tx from that address is detected to be entering/ leaving
+// mempool
+func CheckFromAddress(m *data.MemPoolTx, params ...interface{}) bool {
+
+	if len(params) != 1 {
+		return false
+	}
+
+	var status bool
+
+	switch a := params[0].(type) {
+
+	case common.Address:
+
+		// Checking with from address of tx
+		status = m.From == a
+
+	default:
+		// Doing nothing, because `status`
+		// is already false
+	}
+
+	return status
+
 }
