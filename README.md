@@ -17,6 +17,7 @@ Reduce Chaos in MemPool 😌
 		- [Pending To Address `A`](#pending-to-A)
 		- [Top `X` Pending Tx(s)](#top-X-pending)
 		- [New Pending Tx(s)](#new-pending-tx(s)) **[ WebSocket ]**
+		- [New Confirmed Tx(s)](#new-confirmed-tx(s)) **[ WebSocket ]**
 	- [Inspecting tx(s) in queued pool](#queued-pool)
 		- [Queued For >= `X`](#queued-for-more-than-X)
 		- [Queued For <= `X`](#queued-for-less-than-X)
@@ -24,6 +25,7 @@ Reduce Chaos in MemPool 😌
 		- [Queued To Address `A`](#queued-to-A)
 		- [Top `X` Queued Tx(s)](#top-X-queued)
 		- [New Queued Tx(s)](#new-queued-tx(s)) **[ WebSocket ]**
+		- [New Unstuck Tx(s)](#new-unstuck-tx(s)) **[ WebSocket ]**
 - [Any easy to use test ground for API ?](#graphQL-playground)
 
 ## Motivation
@@ -379,6 +381,26 @@ subscription {
 }
 ```
 
+---
+
+### New confirmed tx(s)
+
+Listening for any new tx, leaving pending pool i.e. **confirmed**, in real-time, over websocket transport
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newConfirmedTx{
+    from
+    to
+    gasPrice
+  }
+}
+```
+
 ### Queued Pool
 
 Queued tx pool inspection APIs.
@@ -587,6 +609,26 @@ subscription {
     gas
     gasPrice
     nonce
+  }
+}
+```
+
+---
+
+### New unstuck tx(s)
+
+Listening for any new tx, leaving queued tx pool i.e. **unstuck**, in real-time, over websocket transport
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newUnstuckTx{
+    from
+    to
+    gasPrice
   }
 }
 ```
