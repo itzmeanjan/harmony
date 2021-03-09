@@ -6,7 +6,6 @@ package graph
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/itzmeanjan/harmony/app/config"
@@ -203,19 +202,83 @@ func (r *subscriptionResolver) NewUnstuckTx(ctx context.Context) (<-chan *model.
 }
 
 func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	if !checkAddress(address) {
+		return nil, errors.New("Invalid address")
+	}
+
+	_pubsub, err := SubscribeToPendingTxEntry(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	// Because client wants to get notified only when tx of certain address is detected
+	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+
+	return comm, nil
+
 }
 
 func (r *subscriptionResolver) NewQueuedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	if !checkAddress(address) {
+		return nil, errors.New("Invalid address")
+	}
+
+	_pubsub, err := SubscribeToQueuedTxEntry(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	// Because client wants to get notified only when tx of certain address is detected
+	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+
+	return comm, nil
+
 }
 
 func (r *subscriptionResolver) NewConfirmedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	if !checkAddress(address) {
+		return nil, errors.New("Invalid address")
+	}
+
+	_pubsub, err := SubscribeToPendingTxExit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	// Because client wants to get notified only when tx of certain address is detected
+	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+
+	return comm, nil
+
 }
 
 func (r *subscriptionResolver) NewUnstuckTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
-	panic(fmt.Errorf("not implemented"))
+
+	if !checkAddress(address) {
+		return nil, errors.New("Invalid address")
+	}
+
+	_pubsub, err := SubscribeToQueuedTxExit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 1)
+
+	// Because client wants to get notified only when tx of certain address is detected
+	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+
+	return comm, nil
+
 }
 
 // Query returns generated.QueryResolver implementation.
