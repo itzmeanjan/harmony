@@ -361,6 +361,8 @@ query {
 
 Listening for any new tx, being added to pending pool, in real-time, over websocket transport
 
+![gql_subscription](./sc/gql_subscription.gif)
+
 Transport : **WebSocket**
 
 URL : **/v1/graphql**
