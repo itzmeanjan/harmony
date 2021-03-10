@@ -207,7 +207,7 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, c
 					// of our interest, we'll attempt to deserialize
 					// data to deliver it to client in expected format
 					message := UnmarshalPubSubMessage([]byte(m.Payload))
-					if message != nil && pubCriteria(message, params) {
+					if message != nil && pubCriteria(message, params...) {
 						comm <- message.ToGraphQL()
 					}
 
