@@ -19,7 +19,7 @@ func NoCriteria(*data.MemPoolTx, ...interface{}) bool {
 	return true
 }
 
-// CheckFromAddress - Just checks from address of tx, so that client 
+// CheckFromAddress - Just checks `from` address of tx, so that client
 // is only notified when tx from that address is detected to be entering/ leaving
 // mempool
 func CheckFromAddress(m *data.MemPoolTx, params ...interface{}) bool {
@@ -36,6 +36,40 @@ func CheckFromAddress(m *data.MemPoolTx, params ...interface{}) bool {
 
 		// Checking with from address of tx
 		status = m.From == a
+
+	default:
+		// Doing nothing, because `status`
+		// is already false
+	}
+
+	return status
+
+}
+
+// CheckToAddress - Just checks `to` address of tx, so that client
+// is only notified when tx `to` that address is detected to be entering/ leaving
+// mempool
+func CheckToAddress(m *data.MemPoolTx, params ...interface{}) bool {
+
+	if len(params) != 1 {
+		return false
+	}
+
+	var status bool
+
+	switch a := params[0].(type) {
+
+	case common.Address:
+
+		// Checking with `to` address of tx
+		//
+		// @note For tx(s) trying to deploy
+		// contract, there'll be no `to` address
+		//
+		// That's why 👇 check
+		if m.To != nil {
+			status = *m.To == a
+		}
 
 	default:
 		// Doing nothing, because `status`
