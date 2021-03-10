@@ -34,3 +34,23 @@ type Query {
   topXPendingWithLowGasPrice(x: Int!): [MemPoolTx!]!
   topXQueuedWithLowGasPrice(x: Int!): [MemPoolTx!]!
 }
+
+type Subscription {
+  newPendingTx: MemPoolTx!
+  newQueuedTx: MemPoolTx!
+
+  newConfirmedTx: MemPoolTx!
+  newUnstuckTx: MemPoolTx!
+
+  newPendingTxFrom(address: String!): MemPoolTx!
+  newQueuedTxFrom(address: String!): MemPoolTx!
+
+  newConfirmedTxFrom(address: String!): MemPoolTx!
+  newUnstuckTxFrom(address: String!): MemPoolTx!
+
+  newPendingTxTo(address: String!): MemPoolTx!
+  newQueuedTxTo(address: String!): MemPoolTx!
+
+  newConfirmedTxTo(address: String!): MemPoolTx!
+  newUnstuckTxTo(address: String!): MemPoolTx!
+}

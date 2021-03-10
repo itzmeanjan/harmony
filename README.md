@@ -11,7 +11,29 @@ Reduce Chaos in MemPool 😌
 - [How do I interact with `harmony` ?](#usage)
 	- [Checking overall status of mempool](#status-of-memPool)
 	- [Inspecting tx(s) in pending pool](#pending-pool)
+		- [Pending For >= `X`](#pending-for-more-than-X)
+		- [Pending For <= `X`](#pending-for-less-than-X)
+		- [Pending From Address `A`](#pending-from-A)
+		- [Pending To Address `A`](#pending-to-A)
+		- [Top `X` Pending Tx(s)](#top-X-pending)
+		- [New Pending Tx(s)](#new-pending-txs) **[ WebSocket ]**
+		- [New Confirmed Tx(s)](#new-confirmed-txs) **[ WebSocket ]**
+		- [New Pending Tx(s) From Address `A`](#new-pending-txs-from) **[ WebSocket ]**
+		- [New Confirmed Tx(s) From Address `A`](#new-confirmed-txs-from) **[ WebSocket ]**
+		- [New Pending Tx(s) To Address `A`](#new-pending-txs-to) **[ WebSocket ]**
+		- [New Confirmed Tx(s) To Address `A`](#new-confirmed-txs-to) **[ WebSocket ]**
 	- [Inspecting tx(s) in queued pool](#queued-pool)
+		- [Queued For >= `X`](#queued-for-more-than-X)
+		- [Queued For <= `X`](#queued-for-less-than-X)
+		- [Queued From Address `A`](#queued-from-A)
+		- [Queued To Address `A`](#queued-to-A)
+		- [Top `X` Queued Tx(s)](#top-X-queued)
+		- [New Queued Tx(s)](#new-queued-txs) **[ WebSocket ]**
+		- [New Unstuck Tx(s)](#new-unstuck-txs) **[ WebSocket ]**
+		- [New Queued Tx(s) From Address `A`](#new-queued-txs-from) **[ WebSocket ]**
+		- [New Unstuck Tx(s) From Address `A`](#new-unstuck-txs-from) **[ WebSocket ]**
+		- [New Queued Tx(s) To Address `A`](#new-queued-txs-to) **[ WebSocket ]**
+		- [New Unstuck Tx(s) To Address `A`](#new-unstuck-txs-to) **[ WebSocket ]**
 - [Any easy to use test ground for API ?](#graphQL-playground)
 
 ## Motivation
@@ -128,6 +150,10 @@ networkID | The mempool monitoring engine keeps track of mempool of this network
 
 ### Pending Pool
 
+Pending pool inspection related APIs.
+
+### Pending for more than `X`
+
 For listing all tx(s) pending for more than or equals to `x` time unit, send graphQL query
 
 Method : **POST**
@@ -185,6 +211,8 @@ You'll receive response of form
 
 ---
 
+### Pending for less than `X`
+
 For listing all tx(s) pending for less than or equals to `x` time unit, send graphQL query
 
 Method : **POST**
@@ -214,6 +242,8 @@ query {
 ```
 
 ---
+
+### Pending from `A`
 
 For getting a list of all pending tx(s) `from` specific address, send a graphQL query like 👇
 
@@ -246,6 +276,8 @@ query {
 
 ---
 
+### Pending to `A`
+
 For getting a list of all pending tx(s) sent `to` specific address, you can send a graphQL query like 👇
 
 Method : **POST**
@@ -274,6 +306,8 @@ query {
 ```
 
 ---
+
+### Top `X` pending
 
 Top **X** pending transaction(s), with high gas price
 
@@ -331,7 +365,137 @@ query {
 }
 ```
 
+---
+
+### New pending tx(s)
+
+Listening for any new tx, being added to pending pool, in real-time, over websocket transport
+
+![gql_subscription](./sc/gql_subscription.gif)
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newPendingTx{
+    from
+    to
+    gas
+    gasPrice
+    nonce
+  }
+}
+```
+
+---
+
+### New confirmed tx(s)
+
+Listening for any new tx, leaving pending pool i.e. **confirmed**, in real-time, over websocket transport
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newConfirmedTx{
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New pending tx(s) `from`
+
+When ever any tx is detected to be entering pending pool, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newPendingTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New confirmed tx(s) `from`
+
+When ever any tx is detected to be leaving pending pool i.e. _got included in some block_, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newConfirmedTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New pending tx(s) `to`
+
+When ever any tx is detected to be entering pending pool, where `to` address is matching with specified one, subscriber will be notified of it.
+
+> Note: Tx(s) attempting to deploy contract, will have no `to` address
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newPendingTxTo(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New confirmed tx(s) `to`
+
+When ever any tx is detected to be leaving pending pool i.e. _got included in some block_, where `to` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newConfirmedTxTo(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
 ### Queued Pool
+
+Queued tx pool inspection APIs.
+
+### Queued for more than `X`
 
 For listing all tx(s) queued for more than or equals to `x` time unit, send graphQL query
 
@@ -363,6 +527,8 @@ query {
 
 ---
 
+### Queued for less than `X`
+
 For listing all tx(s) queued for less than or equals to `x` time unit, send graphQL query
 
 Method : **POST**
@@ -392,6 +558,8 @@ query {
 ```
 
 ---
+
+### Queued from `A`
 
 For getting a list of all queued tx(s) `from` specific address, send a graphQL query like 👇
 
@@ -424,6 +592,8 @@ query {
 
 ---
 
+### Queued to `A`
+
 For getting a list of all queued tx(s) sent `to` specific address, you can send a graphQL query like 👇
 
 Method : **POST**
@@ -452,6 +622,8 @@ query {
 ```
 
 ---
+
+### Top `X` pending
 
 Top **X** queued transaction(s), with high gas price
 
@@ -509,9 +681,133 @@ query {
 }
 ```
 
+---
+
+### New queued tx(s)
+
+Listening for any new tx, being added to queued pool, in real-time, over websocket transport
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newQueuedTx{
+    from
+    to
+    gas
+    gasPrice
+    nonce
+  }
+}
+```
+
+---
+
+### New unstuck tx(s)
+
+Listening for any new tx, leaving queued tx pool i.e. **unstuck**, in real-time, over websocket transport
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newUnstuckTx{
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New queued tx(s) `from`
+
+When ever any tx is detected to be entering queued pool _( because they're stuck due to nonce gap )_, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newQueuedTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New unstuck tx(s) `from`
+
+When ever any tx is detected to be leaving queued pool _( because they were stuck due to nonce gap )_, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newUnstuckTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New queued tx(s) `to`
+
+When ever any tx is detected to be entering queued pool _( because they're stuck due to nonce gap )_, where `to` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newQueuedTxTo(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New unstuck tx(s) `to`
+
+When ever any tx is detected to be leaving queued pool _( because they were stuck due to nonce gap )_, where `to` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newUnstuckTxTo(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
 ## GraphQL Playground
 
-`harmony` packs one graphQL playground for you.
+`harmony` packs one graphQL playground for you, where you can play around with both `query` & `subscription` methods.
+
+> `query` works over HTTP transport, where as `subscription` works only over Websocket transport.
 
 ![graphql_playground](./sc/gql_playground.png)
 

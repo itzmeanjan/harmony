@@ -202,16 +202,16 @@ func (m *MemPoolTx) ToMessagePack() ([]byte, error) {
 }
 
 // FromMessagePack - Given serialized byte array, attempts to deserialize
-// into structured format
+// into structured tx format
 func FromMessagePack(data []byte) (*MemPoolTx, error) {
 
-	var tx *MemPoolTx
+	var tx MemPoolTx
 
-	if err := msgpack.Unmarshal(data, tx); err != nil {
+	if err := msgpack.Unmarshal(data, &tx); err != nil {
 		return nil, err
 	}
 
-	return tx, nil
+	return &tx, nil
 
 }
 

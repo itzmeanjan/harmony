@@ -2,13 +2,16 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/gorilla/websocket"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph"
@@ -27,12 +30,35 @@ func Start(ctx context.Context, res *data.Resource) {
 			Format: "${time_rfc3339} [📩] ${method} | ${uri} | ${status} | ${remote_ip} | ${latency_human}\n",
 		}))
 
+	router.Use(middleware.CORSWithConfig(
+		middleware.CORSConfig{
+			Skipper:      middleware.DefaultSkipper,
+			AllowOrigins: []string{"*"},
+			AllowMethods: []string{http.MethodGet, http.MethodPost},
+		}))
+
 	v1 := router.Group("/v1")
 
 	graphql := handler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{
 			Resolvers: &graph.Resolver{},
 		}))
+
+	// -- Allowed underlying network transports
+	// using which clients can talk to server
+	//
+	// 👇 to be used for answering queries
+	graphql.AddTransport(transport.POST{})
+	// 👇 to be used for subscription
+	graphql.AddTransport(transport.Websocket{
+		KeepAlivePingInterval: 10 * time.Second,
+		Upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
+	})
+	// -- Ends here
 
 	if graphql == nil {
 
@@ -54,7 +80,22 @@ func Start(ctx context.Context, res *data.Resource) {
 
 		})
 
+		v1.GET("/graphql", func(c echo.Context) error {
+
+			if !c.IsWebSocket() {
+				return errors.New("Only websocket transport allowed")
+			}
+
+			graphql.ServeHTTP(c.Response().Writer, c.Request())
+			return nil
+
+		})
+
 		v1.POST("/graphql", func(c echo.Context) error {
+
+			if c.IsWebSocket() {
+				return errors.New("Only http transport allowed")
+			}
 
 			graphql.ServeHTTP(c.Response().Writer, c.Request())
 			return nil
@@ -63,7 +104,7 @@ func Start(ctx context.Context, res *data.Resource) {
 
 		v1.GET("/graphql-playground", func(c echo.Context) error {
 
-			gpg := playground.Handler("harmony", "/v1/graphql")
+			gpg := playground.Handler("harmony : Reduce Chaos in MemPool 😌", "/v1/graphql")
 
 			if gpg == nil {
 
