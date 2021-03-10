@@ -35,6 +35,7 @@ Reduce Chaos in MemPool 😌
 		- [New Queued Tx(s) To Address `A`](#new-queued-txs-to) **[ WebSocket ]**
 		- [New Unstuck Tx(s) To Address `A`](#new-unstuck-txs-to) **[ WebSocket ]**
 - [Any easy to use test ground for API ?](#graphQL-playground)
+- [Do you have any example(s), showing programmatically querying/ subscribing to GraphQL API ?](#graphQL-query-subscription-examples)
 
 ## Motivation
 
@@ -812,6 +813,46 @@ subscription {
 ![graphql_playground](./sc/gql_playground.png)
 
 URI : `https://<base-url>/v1/graphql-playground`
+
+## GraphQL Query/ Subscription Examples
+
+I've written some examples for programmatically querying GraphQL API over HTTP & subscribing to topics for listening to MemPool state changes in real-time, over Websocket transport.
+
+![gql_subscription_example](./sc/gql_subscription_example.gif)
+
+You can find those [here](./examples). Before you run those
+
+- Make sure you've Python3 installed. They're tested to be working on `Python 3.9.2`
+- Let's first enable virtual environment, by doing
+
+```bash
+cd examples
+python3 -m venv venv
+source venv/bin/activate
+```
+
+- We can now fetch dependencies, by doing
+
+```bash
+pip install -r requirements.txt
+```
+
+- You can now run any of examples, by doing
+
+
+```bash
+python3 query.py
+python3 subscribe_1.py
+```
+
+> Make sure, you've access to `harmony` node.
+
+- Finally when you're done, you can get out of virtual environment
+
+
+```bash
+deactivate
+```
 
 ---
 > Note: `harmony` is not recommended for use in production environment at time of writing this. It's under active development.
