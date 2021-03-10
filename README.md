@@ -18,6 +18,8 @@ Reduce Chaos in MemPool 😌
 		- [Top `X` Pending Tx(s)](#top-X-pending)
 		- [New Pending Tx(s)](#new-pending-txs) **[ WebSocket ]**
 		- [New Confirmed Tx(s)](#new-confirmed-txs) **[ WebSocket ]**
+		- [New Pending Tx(s) From Address `A`](#new-pending-txs-from) **[ WebSocket ]**
+		- [New Confirmed Tx(s) From Address `A`](#new-confirmed-txs-from) **[ WebSocket ]**
 	- [Inspecting tx(s) in queued pool](#queued-pool)
 		- [Queued For >= `X`](#queued-for-more-than-X)
 		- [Queued For <= `X`](#queued-for-less-than-X)
@@ -26,6 +28,8 @@ Reduce Chaos in MemPool 😌
 		- [Top `X` Queued Tx(s)](#top-X-queued)
 		- [New Queued Tx(s)](#new-queued-txs) **[ WebSocket ]**
 		- [New Unstuck Tx(s)](#new-unstuck-txs) **[ WebSocket ]**
+		- [New Queued Tx(s) From Address `A`](#new-queued-txs-from) **[ WebSocket ]**
+		- [New Unstuck Tx(s) From Address `A`](#new-unstuck-txs-from) **[ WebSocket ]**
 - [Any easy to use test ground for API ?](#graphQL-playground)
 
 ## Motivation
@@ -401,6 +405,46 @@ subscription {
 }
 ```
 
+---
+
+### New pending tx(s) `from`
+
+When ever any tx is detected to be entering pending pool, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newPendingTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New confirmed tx(s) `from`
+
+When ever any tx is detected to be leaving pending pool i.e. _got included in some block_, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newConfirmedTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
 ### Queued Pool
 
 Queued tx pool inspection APIs.
@@ -626,6 +670,46 @@ URL : **/v1/graphql**
 ```graphql
 subscription {
   newUnstuckTx{
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New queued tx(s) `from`
+
+When ever any tx is detected to be entering queued pool _( because they're stuck due to nonce gap )_, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newQueuedTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+  }
+}
+```
+
+---
+
+### New unstuck tx(s) `from`
+
+When ever any tx is detected to be leaving queued pool _( because they were stuck due to nonce gap )_, where `from` address is matching with specified one, subscriber will be notified of it.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newUnstuckTxFrom(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
     from
     to
     gasPrice
