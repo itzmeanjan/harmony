@@ -17,7 +17,9 @@ try:
                 to
                 nonce
                 gasPrice
+                queuedFor
                 pendingFor
+                pool
             }
         }
     """
