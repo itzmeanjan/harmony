@@ -84,8 +84,10 @@ type MemPoolTx struct {
 	V                *hexutil.Big    `json:"v"`
 	R                *hexutil.Big    `json:"r"`
 	S                *hexutil.Big    `json:"s"`
-	PendingFrom      time.Time
 	QueuedAt         time.Time
+	UnstuckAt        time.Time
+	PendingFrom      time.Time
+	ConfirmedAt      time.Time
 	Pool             string
 }
 

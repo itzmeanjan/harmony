@@ -227,6 +227,8 @@ func (q *QueuedPool) Remove(ctx context.Context, pubsub *redis.Client, txHash co
 		return nil
 	}
 
+	q.Transactions[txHash].UnstuckAt = time.Now().UTC()
+
 	// Publishing unstuck tx, this is probably going to
 	// enter pending pool now
 	q.PublishRemoved(ctx, pubsub, q.Transactions[txHash])

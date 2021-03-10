@@ -222,6 +222,11 @@ func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txHash c
 		return false
 	}
 
+	// Tx got confirmed, to be used when computing
+	// how long it spent in pending pool
+	p.Transactions[txHash].ConfirmedAt = time.Now().UTC()
+	p.Transactions[txHash].Pool = "confirmed"
+
 	// Publishing this confirmed tx
 	p.PublishRemoved(ctx, pubsub, p.Transactions[txHash])
 
