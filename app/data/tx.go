@@ -248,7 +248,7 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 			Input:      m.Input.String(),
 			Nonce:      HexToDecimal(m.Nonce),
 			PendingFor: "0 s",
-			QueuedFor:  time.Now().UTC().Sub(m.PendingFrom).String(),
+			QueuedFor:  time.Now().UTC().Sub(m.QueuedAt).String(),
 			Pool:       m.Pool,
 		}
 
