@@ -224,6 +224,19 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 	switch m.Pool {
 
+	case "queued":
+
+		gqlTx = &model.MemPoolTx{
+			From:       m.From.Hex(),
+			Gas:        HexToDecimal(m.Gas),
+			Hash:       m.Hash.Hex(),
+			Input:      m.Input.String(),
+			Nonce:      HexToDecimal(m.Nonce),
+			PendingFor: "0 s",
+			QueuedFor:  time.Now().UTC().Sub(m.QueuedAt).String(),
+			Pool:       m.Pool,
+		}
+
 	case "pending":
 
 		gqlTx = &model.MemPoolTx{
@@ -237,11 +250,13 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 			Pool:       m.Pool,
 		}
 
-		if !m.QueuedAt.Equal(time.Time{}) {
-			gqlTx.QueuedFor = m.PendingFrom.Sub(m.QueuedAt).String()
+		if !m.QueuedAt.Equal(time.Time{}) && !m.UnstuckAt.Equal(time.Time{}) {
+
+			gqlTx.QueuedFor = m.UnstuckAt.Sub(m.QueuedAt).String()
+
 		}
 
-	case "queued":
+	case "confirmed":
 
 		gqlTx = &model.MemPoolTx{
 			From:       m.From.Hex(),
@@ -249,9 +264,15 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 			Hash:       m.Hash.Hex(),
 			Input:      m.Input.String(),
 			Nonce:      HexToDecimal(m.Nonce),
-			PendingFor: "0 s",
-			QueuedFor:  time.Now().UTC().Sub(m.QueuedAt).String(),
+			PendingFor: m.ConfirmedAt.Sub(m.PendingFrom).String(),
+			QueuedFor:  "0 s",
 			Pool:       m.Pool,
+		}
+
+		if !m.QueuedAt.Equal(time.Time{}) && !m.UnstuckAt.Equal(time.Time{}) {
+
+			gqlTx.QueuedFor = m.UnstuckAt.Sub(m.QueuedAt).String()
+
 		}
 
 	}
