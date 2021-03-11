@@ -19,6 +19,7 @@ Reduce Chaos in MemPool 😌
 		- [Pending Duplicate Tx(s)](#pending-duplicate-txs)
 		- [New Pending Tx(s)](#new-pending-txs) **[ WebSocket ]**
 		- [New Confirmed Tx(s)](#new-confirmed-txs) **[ WebSocket ]**
+		- [Catch All Pending Pool Changes](#pending-pool-changes) **[ WebSocket ]**
 		- [New Pending Tx(s) From Address `A`](#new-pending-txs-from) **[ WebSocket ]**
 		- [New Confirmed Tx(s) From Address `A`](#new-confirmed-txs-from) **[ WebSocket ]**
 		- [New Pending Tx(s) To Address `A`](#new-pending-txs-to) **[ WebSocket ]**
@@ -32,6 +33,7 @@ Reduce Chaos in MemPool 😌
 		- [Queued Duplicate Tx(s)](#queued-duplicate-txs)
 		- [New Queued Tx(s)](#new-queued-txs) **[ WebSocket ]**
 		- [New Unstuck Tx(s)](#new-unstuck-txs) **[ WebSocket ]**
+		- [Catch All Queued Pool Changes](#queued-pool-changes) **[ WebSocket ]**
 		- [New Queued Tx(s) From Address `A`](#new-queued-txs-from) **[ WebSocket ]**
 		- [New Unstuck Tx(s) From Address `A`](#new-unstuck-txs-from) **[ WebSocket ]**
 		- [New Queued Tx(s) To Address `A`](#new-queued-txs-to) **[ WebSocket ]**
@@ -442,6 +444,30 @@ subscription {
 
 ---
 
+### Pending Pool Changes
+
+Whenever any change in pending tx pool happens i.e. tx joins/ leaves pool, subscriber will be notified of those
+
+- Tx joins pending pool, when it's ready to be included in next block [ **though might not** ]
+- Tx leaves pool, when tx it has been included in just mined block
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  pendingPool{
+    from
+    to
+    gasPrice
+	pool
+  }
+}
+```
+
+---
+
 ### New pending tx(s) `from`
 
 When ever any tx is detected to be entering pending pool, where `from` address is matching with specified one, subscriber will be notified of it.
@@ -778,6 +804,30 @@ subscription {
     from
     to
     gasPrice
+  }
+}
+```
+
+---
+
+### Queued Pool Changes
+
+Whenever any change in queued tx pool happens i.e. tx joins/ leaves pool, subscriber will be notified of those
+
+- Tx joins queued pool, due to some issue in sender's account [ **mostly nonce gap** ], because it's not eligible for inclusion in next block to be mined
+- Tx leaves pool, when lower nonce has been filled up & this stuck tx is now ready to get included in block [ **It's unstuck now** ]
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  queuedPool{
+    from
+    to
+    gasPrice
+	pool
   }
 }
 ```
