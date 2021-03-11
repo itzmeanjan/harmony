@@ -107,11 +107,11 @@ func checkHash(hash string) bool {
 
 }
 
-// SubscribeToTopic - Subscribes to Redis topic, with context of caller
+// SubscribeToTopic - Subscribes to Redis topic(s), with context of caller
 // while waiting for subscription confirmation
-func SubscribeToTopic(ctx context.Context, topic string) (*redis.PubSub, error) {
+func SubscribeToTopic(ctx context.Context, topic ...string) (*redis.PubSub, error) {
 
-	_pubsub := redisClient.Subscribe(ctx, topic)
+	_pubsub := redisClient.Subscribe(ctx, topic...)
 
 	// Waiting for subscription confirmation
 	_, err := _pubsub.Receive(ctx)
@@ -120,6 +120,29 @@ func SubscribeToTopic(ctx context.Context, topic string) (*redis.PubSub, error) 
 	}
 
 	return _pubsub, nil
+
+}
+
+// SubscribeToPendingPool - Subscribes to both topics, associated with changes
+// happening in pending tx pool
+//
+// When tx joins/ leaves pending pool, subscribers will receive notification
+func SubscribeToPendingPool(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic())
+
+}
+
+// SubscribeToQueuedPool - Subscribes to both topics, associated with changes
+// happening in queued tx pool
+//
+// When tx joins/ leaves queued pool, subscribers will receive notification
+//
+// @note Tx(s) generally join queued pool, when there's nonce gap & this tx can't be
+// processed until some lower nonce tx(s) get(s) processed
+func SubscribeToQueuedPool(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic())
 
 }
 
