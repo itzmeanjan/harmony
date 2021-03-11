@@ -35,6 +35,52 @@ func (q *QueuedPool) Count() uint64 {
 
 }
 
+// DuplicateTxs - Attempting to find duplicate tx(s) for given
+// txHash.
+//
+// @note In duplicate tx list, the tx which was provided as input
+// will not be included
+//
+// Considering one tx duplicate of given one, if this tx has same
+// nonce & sender address, as of given ones
+func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	// Denotes tx hash itself doesn't exists in queued pool
+	//
+	// So we can't find duplicate tx(s) for that txHash
+	targetTx, ok := q.Transactions[hash]
+	if !ok {
+		return nil
+	}
+
+	result := make([]*MemPoolTx, 0, q.Count())
+
+	for h, tx := range q.Transactions {
+
+		// First checking if tx under radar is the one for which
+		// we're finding duplicate tx(s). If yes, we will move to next one
+		//
+		// Now we can check whether current tx under radar is having same nonce
+		// and sender address, as of target tx ( for which we had txHash, as input )
+		// or not
+		//
+		//  If yes, we'll include it considerable duplicate tx list, for given
+		// txHash
+		if h != hash && tx.From == targetTx.From && tx.Nonce == targetTx.Nonce {
+
+			result = append(result, tx)
+
+		}
+
+	}
+
+	return result
+
+}
+
 // ListTxs - Returns all tx(s) present in queued pool, as slice
 func (q *QueuedPool) ListTxs() []*MemPoolTx {
 
