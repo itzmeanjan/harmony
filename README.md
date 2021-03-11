@@ -16,6 +16,7 @@ Reduce Chaos in MemPool 😌
 		- [Pending From Address `A`](#pending-from-A)
 		- [Pending To Address `A`](#pending-to-A)
 		- [Top `X` Pending Tx(s)](#top-X-pending)
+		- [Pending Duplicate Tx(s)](#pending-duplicate-txs)
 		- [New Pending Tx(s)](#new-pending-txs) **[ WebSocket ]**
 		- [New Confirmed Tx(s)](#new-confirmed-txs) **[ WebSocket ]**
 		- [New Pending Tx(s) From Address `A`](#new-pending-txs-from) **[ WebSocket ]**
@@ -28,6 +29,7 @@ Reduce Chaos in MemPool 😌
 		- [Queued From Address `A`](#queued-from-A)
 		- [Queued To Address `A`](#queued-to-A)
 		- [Top `X` Queued Tx(s)](#top-X-queued)
+		- [Queued Duplicate Tx(s)](#queued-duplicate-txs)
 		- [New Queued Tx(s)](#new-queued-txs) **[ WebSocket ]**
 		- [New Unstuck Tx(s)](#new-unstuck-txs) **[ WebSocket ]**
 		- [New Queued Tx(s) From Address `A`](#new-queued-txs-from) **[ WebSocket ]**
@@ -368,6 +370,34 @@ query {
 
 ---
 
+### Pending Duplicate Tx(s)
+
+Given txHash, attempts to find out duplicate tx(s) present in pending pool.
+
+> Tx is considered to be duplicate, when it has, same sender address & nonce
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  pendingDuplicates(hash: "0x2d17f2941e33afd3a648e3257857ed032191b7b93911364ba4906d640ca69b49") {
+    from
+	to
+  	gas
+  	gasPrice
+  	hash
+  	nonce
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
 ### New pending tx(s)
 
 Listening for any new tx, being added to pending pool, in real-time, over websocket transport
@@ -675,6 +705,34 @@ query {
   	v
   	r
   	s
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
+### Queued Duplicate Tx(s)
+
+Given txHash, attempts to find out duplicate tx(s) present in queued pool.
+
+> Tx is considered to be duplicate, when it has, same sender address & nonce
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  queuedDuplicates(hash: "0x2d17f2941e33afd3a648e3257857ed032191b7b93911364ba4906d640ca69b49") {
+    from
+	to
+  	gas
+  	gasPrice
+  	hash
+  	nonce
   	pendingFor
   	queuedFor
   	pool
