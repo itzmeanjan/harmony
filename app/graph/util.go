@@ -166,11 +166,18 @@ func SubscribeToQueuedTxExit(ctx context.Context) (*redis.PubSub, error) {
 //
 // You can always blindly return `true` in your `evaluationCriteria` function,
 // so that you get to receive any tx being published on topic of your interest
-func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
+func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
 
 	defer func() {
 		close(comm)
 	}()
+
+	if !(topics != nil && len(topics) > 0) {
+
+		log.Printf("[❗️] Empty topic list was unexpected\n")
+		return
+
+	}
 
 	{
 	OUTER:
@@ -182,16 +189,22 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, c
 
 				// Denotes `harmony` is being shutdown
 				//
-				// We must unsubscribe & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), pubsub, topic)
+				// We must unsubscribe from all topics & get out of this infinite loop
+				for _, topic := range topics {
+					UnsubscribeFromTopic(context.Background(), pubsub, topic)
+				}
+
 				break OUTER
 
 			case <-ctx.Done():
 
 				// Denotes client is not active anymore
 				//
-				// We must unsubscribe & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), pubsub, topic)
+				// We must unsubscribe from all topics & get out of this infinite loop
+				for _, topic := range topics {
+					UnsubscribeFromTopic(context.Background(), pubsub, topic)
+				}
+
 				break OUTER
 
 			case <-time.After(time.Millisecond * time.Duration(300)):

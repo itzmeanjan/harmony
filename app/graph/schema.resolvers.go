@@ -136,9 +136,10 @@ func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxEntryPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
@@ -150,9 +151,10 @@ func (r *subscriptionResolver) NewQueuedTx(ctx context.Context) (<-chan *model.M
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxEntryPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
@@ -164,9 +166,10 @@ func (r *subscriptionResolver) NewConfirmedTx(ctx context.Context) (<-chan *mode
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxExitPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
@@ -178,9 +181,10 @@ func (r *subscriptionResolver) NewUnstuckTx(ctx context.Context) (<-chan *model.
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxExitPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
@@ -196,9 +200,10 @@ func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address str
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
@@ -214,9 +219,10 @@ func (r *subscriptionResolver) NewQueuedTxFrom(ctx context.Context, address stri
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
@@ -232,9 +238,10 @@ func (r *subscriptionResolver) NewConfirmedTxFrom(ctx context.Context, address s
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
@@ -250,9 +257,10 @@ func (r *subscriptionResolver) NewUnstuckTxFrom(ctx context.Context, address str
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
@@ -268,9 +276,10 @@ func (r *subscriptionResolver) NewPendingTxTo(ctx context.Context, address strin
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
@@ -286,9 +295,10 @@ func (r *subscriptionResolver) NewQueuedTxTo(ctx context.Context, address string
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
@@ -304,9 +314,10 @@ func (r *subscriptionResolver) NewConfirmedTxTo(ctx context.Context, address str
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
@@ -322,9 +333,10 @@ func (r *subscriptionResolver) NewUnstuckTxTo(ctx context.Context, address strin
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
