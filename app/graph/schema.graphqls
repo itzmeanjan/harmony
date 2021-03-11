@@ -33,6 +33,9 @@ type Query {
 
   topXPendingWithLowGasPrice(x: Int!): [MemPoolTx!]!
   topXQueuedWithLowGasPrice(x: Int!): [MemPoolTx!]!
+
+  pendingDuplicates(hash: String!): [MemPoolTx!]!
+  queuedDuplicates(hash: String!): [MemPoolTx!]!
 }
 
 type Subscription {

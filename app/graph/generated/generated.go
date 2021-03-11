@@ -62,10 +62,12 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		PendingDuplicates           func(childComplexity int, hash string) int
 		PendingForLessThan          func(childComplexity int, x string) int
 		PendingForMoreThan          func(childComplexity int, x string) int
 		PendingFrom                 func(childComplexity int, addr string) int
 		PendingTo                   func(childComplexity int, addr string) int
+		QueuedDuplicates            func(childComplexity int, hash string) int
 		QueuedForLessThan           func(childComplexity int, x string) int
 		QueuedForMoreThan           func(childComplexity int, x string) int
 		QueuedFrom                  func(childComplexity int, addr string) int
@@ -105,6 +107,8 @@ type QueryResolver interface {
 	TopXQueuedWithHighGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error)
 	TopXPendingWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error)
 	TopXQueuedWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error)
+	PendingDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error)
+	QueuedDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error)
 }
 type SubscriptionResolver interface {
 	NewPendingTx(ctx context.Context) (<-chan *model.MemPoolTx, error)
@@ -234,6 +238,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.MemPoolTx.Value(childComplexity), true
 
+	case "Query.pendingDuplicates":
+		if e.complexity.Query.PendingDuplicates == nil {
+			break
+		}
+
+		args, err := ec.field_Query_pendingDuplicates_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.PendingDuplicates(childComplexity, args["hash"].(string)), true
+
 	case "Query.pendingForLessThan":
 		if e.complexity.Query.PendingForLessThan == nil {
 			break
@@ -281,6 +297,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.PendingTo(childComplexity, args["addr"].(string)), true
+
+	case "Query.queuedDuplicates":
+		if e.complexity.Query.QueuedDuplicates == nil {
+			break
+		}
+
+		args, err := ec.field_Query_queuedDuplicates_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.QueuedDuplicates(childComplexity, args["hash"].(string)), true
 
 	case "Query.queuedForLessThan":
 		if e.complexity.Query.QueuedForLessThan == nil {
@@ -604,6 +632,9 @@ type Query {
 
   topXPendingWithLowGasPrice(x: Int!): [MemPoolTx!]!
   topXQueuedWithLowGasPrice(x: Int!): [MemPoolTx!]!
+
+  pendingDuplicates(hash: String!): [MemPoolTx!]!
+  queuedDuplicates(hash: String!): [MemPoolTx!]!
 }
 
 type Subscription {
@@ -645,6 +676,21 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		}
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_pendingDuplicates_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["hash"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("hash"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["hash"] = arg0
 	return args, nil
 }
 
@@ -705,6 +751,21 @@ func (ec *executionContext) field_Query_pendingTo_args(ctx context.Context, rawA
 		}
 	}
 	args["addr"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_queuedDuplicates_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["hash"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("hash"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["hash"] = arg0
 	return args, nil
 }
 
@@ -1964,6 +2025,90 @@ func (ec *executionContext) _Query_topXQueuedWithLowGasPrice(ctx context.Context
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().TopXQueuedWithLowGasPrice(rctx, args["x"].(int))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.MemPoolTx)
+	fc.Result = res
+	return ec.marshalNMemPoolTx2ᚕᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTxᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_pendingDuplicates(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_pendingDuplicates_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().PendingDuplicates(rctx, args["hash"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.MemPoolTx)
+	fc.Result = res
+	return ec.marshalNMemPoolTx2ᚕᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTxᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_queuedDuplicates(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_queuedDuplicates_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().QueuedDuplicates(rctx, args["hash"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4012,6 +4157,34 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_topXQueuedWithLowGasPrice(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "pendingDuplicates":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_pendingDuplicates(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "queuedDuplicates":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_queuedDuplicates(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}

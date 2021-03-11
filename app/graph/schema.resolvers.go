@@ -113,6 +113,22 @@ func (r *queryResolver) TopXQueuedWithLowGasPrice(ctx context.Context, x int) ([
 	return toGraphQL(memPool.TopXQueuedWithLowGasPrice(uint64(x))), nil
 }
 
+func (r *queryResolver) PendingDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error) {
+	if !checkHash(hash) {
+		return nil, errors.New("Invalid txHash")
+	}
+
+	return toGraphQL(memPool.PendingDuplicates(common.HexToHash(hash))), nil
+}
+
+func (r *queryResolver) QueuedDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error) {
+	if !checkHash(hash) {
+		return nil, errors.New("Invalid txHash")
+	}
+
+	return toGraphQL(memPool.QueuedDuplicates(common.HexToHash(hash))), nil
+}
+
 func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.MemPoolTx, error) {
 	_pubsub, err := SubscribeToPendingTxEntry(ctx)
 	if err != nil {
