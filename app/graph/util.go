@@ -92,6 +92,21 @@ func checkAddress(address string) bool {
 
 }
 
+// Checks whether received string is valid txHash or not
+func checkHash(hash string) bool {
+
+	reg, err := regexp.Compile(`^(0x\w{64})$`)
+	if err != nil {
+
+		log.Printf("[❗️] Failed to compile regular expression : %s\n", err.Error())
+		return false
+
+	}
+
+	return reg.MatchString(hash)
+
+}
+
 // SubscribeToTopic - Subscribes to Redis topic, with context of caller
 // while waiting for subscription confirmation
 func SubscribeToTopic(ctx context.Context, topic string) (*redis.PubSub, error) {
