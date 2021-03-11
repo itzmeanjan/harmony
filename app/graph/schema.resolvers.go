@@ -189,6 +189,36 @@ func (r *subscriptionResolver) NewUnstuckTx(ctx context.Context) (<-chan *model.
 	return comm, nil
 }
 
+func (r *subscriptionResolver) PendingPool(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+	_pubsub, err := SubscribeToPendingPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to listen to any tx being published on these two topic
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) QueuedPool(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+	_pubsub, err := SubscribeToQueuedPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic()}
+
+	// Because client wants to listen to any tx being published on these two topic
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
+
+	return comm, nil
+}
+
 func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
 		return nil, errors.New("Invalid address")
