@@ -51,7 +51,7 @@ func (r *queryResolver) QueuedForLessThan(ctx context.Context, x string) ([]*mod
 
 func (r *queryResolver) PendingFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.PendingFrom(common.HexToAddress(addr))), nil
@@ -59,7 +59,7 @@ func (r *queryResolver) PendingFrom(ctx context.Context, addr string) ([]*model.
 
 func (r *queryResolver) PendingTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.PendingTo(common.HexToAddress(addr))), nil
@@ -67,7 +67,7 @@ func (r *queryResolver) PendingTo(ctx context.Context, addr string) ([]*model.Me
 
 func (r *queryResolver) QueuedFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.QueuedFrom(common.HexToAddress(addr))), nil
@@ -75,7 +75,7 @@ func (r *queryResolver) QueuedFrom(ctx context.Context, addr string) ([]*model.M
 
 func (r *queryResolver) QueuedTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.QueuedTo(common.HexToAddress(addr))), nil
@@ -83,7 +83,7 @@ func (r *queryResolver) QueuedTo(ctx context.Context, addr string) ([]*model.Mem
 
 func (r *queryResolver) TopXPendingWithHighGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXPendingWithHighGasPrice(uint64(x))), nil
@@ -91,7 +91,7 @@ func (r *queryResolver) TopXPendingWithHighGasPrice(ctx context.Context, x int) 
 
 func (r *queryResolver) TopXQueuedWithHighGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXQueuedWithHighGasPrice(uint64(x))), nil
@@ -99,7 +99,7 @@ func (r *queryResolver) TopXQueuedWithHighGasPrice(ctx context.Context, x int) (
 
 func (r *queryResolver) TopXPendingWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXPendingWithLowGasPrice(uint64(x))), nil
@@ -107,7 +107,7 @@ func (r *queryResolver) TopXPendingWithLowGasPrice(ctx context.Context, x int) (
 
 func (r *queryResolver) TopXQueuedWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXQueuedWithLowGasPrice(uint64(x))), nil
@@ -115,7 +115,7 @@ func (r *queryResolver) TopXQueuedWithLowGasPrice(ctx context.Context, x int) ([
 
 func (r *queryResolver) PendingDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error) {
 	if !checkHash(hash) {
-		return nil, errors.New("Invalid txHash")
+		return nil, errors.New("invalid txHash")
 	}
 
 	return toGraphQL(memPool.PendingDuplicates(common.HexToHash(hash))), nil
@@ -123,7 +123,7 @@ func (r *queryResolver) PendingDuplicates(ctx context.Context, hash string) ([]*
 
 func (r *queryResolver) QueuedDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error) {
 	if !checkHash(hash) {
-		return nil, errors.New("Invalid txHash")
+		return nil, errors.New("invalid txHash")
 	}
 
 	return toGraphQL(memPool.QueuedDuplicates(common.HexToHash(hash))), nil
@@ -236,7 +236,7 @@ func (r *subscriptionResolver) MemPool(ctx context.Context) (<-chan *model.MemPo
 
 func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxEntry(ctx)
@@ -255,7 +255,7 @@ func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address str
 
 func (r *subscriptionResolver) NewQueuedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxEntry(ctx)
@@ -274,7 +274,7 @@ func (r *subscriptionResolver) NewQueuedTxFrom(ctx context.Context, address stri
 
 func (r *subscriptionResolver) NewConfirmedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxExit(ctx)
@@ -293,7 +293,7 @@ func (r *subscriptionResolver) NewConfirmedTxFrom(ctx context.Context, address s
 
 func (r *subscriptionResolver) NewUnstuckTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxExit(ctx)
@@ -312,7 +312,7 @@ func (r *subscriptionResolver) NewUnstuckTxFrom(ctx context.Context, address str
 
 func (r *subscriptionResolver) NewPendingTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxEntry(ctx)
@@ -331,7 +331,7 @@ func (r *subscriptionResolver) NewPendingTxTo(ctx context.Context, address strin
 
 func (r *subscriptionResolver) NewQueuedTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxEntry(ctx)
@@ -350,7 +350,7 @@ func (r *subscriptionResolver) NewQueuedTxTo(ctx context.Context, address string
 
 func (r *subscriptionResolver) NewConfirmedTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxExit(ctx)
@@ -369,7 +369,7 @@ func (r *subscriptionResolver) NewConfirmedTxTo(ctx context.Context, address str
 
 func (r *subscriptionResolver) NewUnstuckTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxExit(ctx)
