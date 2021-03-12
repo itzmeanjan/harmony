@@ -146,6 +146,24 @@ func SubscribeToQueuedPool(ctx context.Context) (*redis.PubSub, error) {
 
 }
 
+// SubscribeToMemPool - Subscribes to any changes happening in mempool
+//
+// As mempool has two segments i.e.
+// 1. Pending Pool
+// 2. Queued Pool
+//
+// It'll subscribe to all 4 topics for listening
+// to tx(s) entering/ leaving any portion of mempool
+func SubscribeToMemPool(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx,
+		config.GetQueuedTxEntryPublishTopic(),
+		config.GetQueuedTxExitPublishTopic(),
+		config.GetPendingTxEntryPublishTopic(),
+		config.GetPendingTxExitPublishTopic())
+
+}
+
 // SubscribeToPendingTxEntry - Subscribe to topic where new pending tx(s)
 // are published
 func SubscribeToPendingTxEntry(ctx context.Context) (*redis.PubSub, error) {
