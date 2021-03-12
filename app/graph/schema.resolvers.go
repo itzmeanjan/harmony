@@ -219,6 +219,21 @@ func (r *subscriptionResolver) QueuedPool(ctx context.Context) (<-chan *model.Me
 	return comm, nil
 }
 
+func (r *subscriptionResolver) MemPool(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+	_pubsub, err := SubscribeToMemPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 4)
+	topics := []string{config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic(), config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to listen to any tx being published on these two topic
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
+
+	return comm, nil
+}
+
 func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
 		return nil, errors.New("Invalid address")

@@ -48,6 +48,8 @@ type Subscription {
   pendingPool: MemPoolTx!
   queuedPool: MemPoolTx!
 
+  memPool: MemPoolTx!
+
   newPendingTxFrom(address: String!): MemPoolTx!
   newQueuedTxFrom(address: String!): MemPoolTx!
 

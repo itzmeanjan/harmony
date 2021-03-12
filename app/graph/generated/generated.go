@@ -79,6 +79,7 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
+		MemPool            func(childComplexity int) int
 		NewConfirmedTx     func(childComplexity int) int
 		NewConfirmedTxFrom func(childComplexity int, address string) int
 		NewConfirmedTxTo   func(childComplexity int, address string) int
@@ -119,6 +120,7 @@ type SubscriptionResolver interface {
 	NewUnstuckTx(ctx context.Context) (<-chan *model.MemPoolTx, error)
 	PendingPool(ctx context.Context) (<-chan *model.MemPoolTx, error)
 	QueuedPool(ctx context.Context) (<-chan *model.MemPoolTx, error)
+	MemPool(ctx context.Context) (<-chan *model.MemPoolTx, error)
 	NewPendingTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
 	NewQueuedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
 	NewConfirmedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
@@ -410,6 +412,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.TopXQueuedWithLowGasPrice(childComplexity, args["x"].(int)), true
 
+	case "Subscription.memPool":
+		if e.complexity.Subscription.MemPool == nil {
+			break
+		}
+
+		return e.complexity.Subscription.MemPool(childComplexity), true
+
 	case "Subscription.newConfirmedTx":
 		if e.complexity.Subscription.NewConfirmedTx == nil {
 			break
@@ -664,6 +673,8 @@ type Subscription {
 
   pendingPool: MemPoolTx!
   queuedPool: MemPoolTx!
+
+  memPool: MemPoolTx!
 
   newPendingTxFrom(address: String!): MemPoolTx!
   newQueuedTxFrom(address: String!): MemPoolTx!
@@ -2461,6 +2472,51 @@ func (ec *executionContext) _Subscription_queuedPool(ctx context.Context, field 
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Subscription().QueuedPool(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func() graphql.Marshaler {
+		res, ok := <-resTmp.(<-chan *model.MemPoolTx)
+		if !ok {
+			return nil
+		}
+		return graphql.WriterFunc(func(w io.Writer) {
+			w.Write([]byte{'{'})
+			graphql.MarshalString(field.Alias).MarshalGQL(w)
+			w.Write([]byte{':'})
+			ec.marshalNMemPoolTx2ᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTx(ctx, field.Selections, res).MarshalGQL(w)
+			w.Write([]byte{'}'})
+		})
+	}
+}
+
+func (ec *executionContext) _Subscription_memPool(ctx context.Context, field graphql.CollectedField) (ret func() graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().MemPool(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4341,6 +4397,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_pendingPool(ctx, fields[0])
 	case "queuedPool":
 		return ec._Subscription_queuedPool(ctx, fields[0])
+	case "memPool":
+		return ec._Subscription_memPool(ctx, fields[0])
 	case "newPendingTxFrom":
 		return ec._Subscription_newPendingTxFrom(ctx, fields[0])
 	case "newQueuedTxFrom":
