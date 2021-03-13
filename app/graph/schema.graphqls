@@ -65,4 +65,8 @@ type Subscription {
 
   newConfirmedTxTo(address: String!): MemPoolTx!
   newUnstuckTxTo(address: String!): MemPoolTx!
+
+  newTxToAInPendingPool(address: String!): MemPoolTx!
+  newTxToAInQueuedPool(address: String!): MemPoolTx!
+  newTxToAInMemPool(address: String!): MemPoolTx!
 }

@@ -26,7 +26,7 @@ func InitMemPool(pool *data.MemPool) error {
 		return nil
 	}
 
-	return errors.New("Bad mempool received in graphQL handler")
+	return errors.New("bad mempool received in graphQL handler")
 
 }
 
@@ -39,7 +39,7 @@ func InitRedisClient(client *redis.Client) error {
 		return nil
 	}
 
-	return errors.New("Bad redis client received in graphQL handler")
+	return errors.New("bad redis client received in graphQL handler")
 
 }
 

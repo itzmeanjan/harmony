@@ -452,6 +452,72 @@ func (r *subscriptionResolver) NewUnstuckTxTo(ctx context.Context, address strin
 	return comm, nil
 }
 
+func (r *subscriptionResolver) NewTxToAInPendingPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToPendingPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx to certain address is detected
+	// to be entering/ leaving pending pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxToAInQueuedPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToQueuedPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx to certain address is detected
+	// to be entering/ leaving queued pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxToAInMemPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToMemPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 4)
+	topics := []string{
+		config.GetQueuedTxEntryPublishTopic(),
+		config.GetQueuedTxExitPublishTopic(),
+		config.GetPendingTxEntryPublishTopic(),
+		config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx to certain address is detected
+	// to be entering/ leaving mem pool
+	//
+	// @note Mempool denotes both pending & queued pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
