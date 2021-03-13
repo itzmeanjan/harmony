@@ -28,21 +28,13 @@ func CheckFromAddress(m *data.MemPoolTx, params ...interface{}) bool {
 		return false
 	}
 
-	var status bool
-
-	switch a := params[0].(type) {
-
-	case common.Address:
-
-		// Checking with from address of tx
-		status = m.From == a
-
-	default:
-		// Doing nothing, because `status`
-		// is already false
+	// Attempting to assert type
+	addr, ok := params[0].(common.Address)
+	if !ok {
+		return false
 	}
 
-	return status
+	return addr == m.From
 
 }
 
@@ -55,27 +47,22 @@ func CheckToAddress(m *data.MemPoolTx, params ...interface{}) bool {
 		return false
 	}
 
-	var status bool
-
-	switch a := params[0].(type) {
-
-	case common.Address:
-
-		// Checking with `to` address of tx
-		//
-		// @note For tx(s) trying to deploy
-		// contract, there'll be no `to` address
-		//
-		// That's why 👇 check
-		if m.To != nil {
-			status = *m.To == a
-		}
-
-	default:
-		// Doing nothing, because `status`
-		// is already false
+	// Attempting to assert type
+	addr, ok := params[0].(common.Address)
+	if !ok {
+		return false
 	}
 
-	return status
+	// Checking with `to` address of tx
+	//
+	// @note For tx(s) trying to deploy
+	// contract, there'll be no `to` address
+	//
+	// That's why 👇 check
+	if m.To == nil {
+		return false
+	}
+
+	return *m.To == addr
 
 }

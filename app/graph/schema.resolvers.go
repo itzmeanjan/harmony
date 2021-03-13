@@ -51,7 +51,7 @@ func (r *queryResolver) QueuedForLessThan(ctx context.Context, x string) ([]*mod
 
 func (r *queryResolver) PendingFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.PendingFrom(common.HexToAddress(addr))), nil
@@ -59,7 +59,7 @@ func (r *queryResolver) PendingFrom(ctx context.Context, addr string) ([]*model.
 
 func (r *queryResolver) PendingTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.PendingTo(common.HexToAddress(addr))), nil
@@ -67,7 +67,7 @@ func (r *queryResolver) PendingTo(ctx context.Context, addr string) ([]*model.Me
 
 func (r *queryResolver) QueuedFrom(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.QueuedFrom(common.HexToAddress(addr))), nil
@@ -75,7 +75,7 @@ func (r *queryResolver) QueuedFrom(ctx context.Context, addr string) ([]*model.M
 
 func (r *queryResolver) QueuedTo(ctx context.Context, addr string) ([]*model.MemPoolTx, error) {
 	if !checkAddress(addr) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	return toGraphQL(memPool.QueuedTo(common.HexToAddress(addr))), nil
@@ -83,7 +83,7 @@ func (r *queryResolver) QueuedTo(ctx context.Context, addr string) ([]*model.Mem
 
 func (r *queryResolver) TopXPendingWithHighGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXPendingWithHighGasPrice(uint64(x))), nil
@@ -91,7 +91,7 @@ func (r *queryResolver) TopXPendingWithHighGasPrice(ctx context.Context, x int) 
 
 func (r *queryResolver) TopXQueuedWithHighGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXQueuedWithHighGasPrice(uint64(x))), nil
@@ -99,7 +99,7 @@ func (r *queryResolver) TopXQueuedWithHighGasPrice(ctx context.Context, x int) (
 
 func (r *queryResolver) TopXPendingWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXPendingWithLowGasPrice(uint64(x))), nil
@@ -107,10 +107,26 @@ func (r *queryResolver) TopXPendingWithLowGasPrice(ctx context.Context, x int) (
 
 func (r *queryResolver) TopXQueuedWithLowGasPrice(ctx context.Context, x int) ([]*model.MemPoolTx, error) {
 	if x <= 0 {
-		return nil, errors.New("Bad argument")
+		return nil, errors.New("bad argument")
 	}
 
 	return toGraphQL(memPool.TopXQueuedWithLowGasPrice(uint64(x))), nil
+}
+
+func (r *queryResolver) PendingDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error) {
+	if !checkHash(hash) {
+		return nil, errors.New("invalid txHash")
+	}
+
+	return toGraphQL(memPool.PendingDuplicates(common.HexToHash(hash))), nil
+}
+
+func (r *queryResolver) QueuedDuplicates(ctx context.Context, hash string) ([]*model.MemPoolTx, error) {
+	if !checkHash(hash) {
+		return nil, errors.New("invalid txHash")
+	}
+
+	return toGraphQL(memPool.QueuedDuplicates(common.HexToHash(hash))), nil
 }
 
 func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.MemPoolTx, error) {
@@ -120,9 +136,10 @@ func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxEntryPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
@@ -134,9 +151,10 @@ func (r *subscriptionResolver) NewQueuedTx(ctx context.Context) (<-chan *model.M
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxEntryPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
@@ -148,9 +166,10 @@ func (r *subscriptionResolver) NewConfirmedTx(ctx context.Context) (<-chan *mode
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxExitPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
@@ -162,16 +181,62 @@ func (r *subscriptionResolver) NewUnstuckTx(ctx context.Context) (<-chan *model.
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxExitPublishTopic()}
 
 	// Because client wants to listen to any tx being published on this topic
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, NoCriteria)
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) PendingPool(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+	_pubsub, err := SubscribeToPendingPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to listen to any tx being published on these two topic
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) QueuedPool(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+	_pubsub, err := SubscribeToQueuedPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic()}
+
+	// Because client wants to listen to any tx being published on these two topic
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) MemPool(ctx context.Context) (<-chan *model.MemPoolTx, error) {
+	_pubsub, err := SubscribeToMemPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 4)
+	topics := []string{config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic(), config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to listen to any tx being published on these two topic
+	go ListenToMessages(ctx, _pubsub, topics, comm, NoCriteria)
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxEntry(ctx)
@@ -180,16 +245,17 @@ func (r *subscriptionResolver) NewPendingTxFrom(ctx context.Context, address str
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewQueuedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxEntry(ctx)
@@ -198,16 +264,17 @@ func (r *subscriptionResolver) NewQueuedTxFrom(ctx context.Context, address stri
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewConfirmedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxExit(ctx)
@@ -216,16 +283,17 @@ func (r *subscriptionResolver) NewConfirmedTxFrom(ctx context.Context, address s
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewUnstuckTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxExit(ctx)
@@ -234,16 +302,83 @@ func (r *subscriptionResolver) NewUnstuckTxFrom(ctx context.Context, address str
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, CheckFromAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxFromAInPendingPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToPendingPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx from certain address is detected
+	// to be entering/ leaving pending pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxFromAInQueuedPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToQueuedPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx from certain address is detected
+	// to be entering/ leaving queued pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxFromAInMemPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToMemPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 4)
+	topics := []string{
+		config.GetQueuedTxEntryPublishTopic(),
+		config.GetQueuedTxExitPublishTopic(),
+		config.GetPendingTxEntryPublishTopic(),
+		config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx from certain address is detected
+	// to be entering/ leaving mem pool
+	//
+	// @note Mempool includes both pending & queued pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckFromAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewPendingTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxEntry(ctx)
@@ -252,16 +387,17 @@ func (r *subscriptionResolver) NewPendingTxTo(ctx context.Context, address strin
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxEntryPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewQueuedTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxEntry(ctx)
@@ -270,16 +406,17 @@ func (r *subscriptionResolver) NewQueuedTxTo(ctx context.Context, address string
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxEntryPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxEntryPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewConfirmedTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToPendingTxExit(ctx)
@@ -288,16 +425,17 @@ func (r *subscriptionResolver) NewConfirmedTxTo(ctx context.Context, address str
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetPendingTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetPendingTxExitPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }
 
 func (r *subscriptionResolver) NewUnstuckTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
 	if !checkAddress(address) {
-		return nil, errors.New("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 
 	_pubsub, err := SubscribeToQueuedTxExit(ctx)
@@ -306,9 +444,76 @@ func (r *subscriptionResolver) NewUnstuckTxTo(ctx context.Context, address strin
 	}
 
 	comm := make(chan *model.MemPoolTx, 1)
+	topics := []string{config.GetQueuedTxExitPublishTopic()}
 
 	// Because client wants to get notified only when tx of certain address is detected
-	go ListenToMessages(ctx, _pubsub, config.GetQueuedTxExitPublishTopic(), comm, CheckToAddress, common.HexToAddress(address))
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxToAInPendingPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToPendingPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx to certain address is detected
+	// to be entering/ leaving pending pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxToAInQueuedPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToQueuedPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 2)
+	topics := []string{config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx to certain address is detected
+	// to be entering/ leaving queued pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
+
+	return comm, nil
+}
+
+func (r *subscriptionResolver) NewTxToAInMemPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error) {
+	if !checkAddress(address) {
+		return nil, errors.New("invalid address")
+	}
+
+	_pubsub, err := SubscribeToMemPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 4)
+	topics := []string{
+		config.GetQueuedTxEntryPublishTopic(),
+		config.GetQueuedTxExitPublishTopic(),
+		config.GetPendingTxEntryPublishTopic(),
+		config.GetPendingTxExitPublishTopic()}
+
+	// Because client wants to get notified only when tx to certain address is detected
+	// to be entering/ leaving mem pool
+	//
+	// @note Mempool denotes both pending & queued pool
+	go ListenToMessages(ctx, _pubsub, topics, comm, CheckToAddress, common.HexToAddress(address))
 
 	return comm, nil
 }

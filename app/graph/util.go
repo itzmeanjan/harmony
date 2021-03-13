@@ -26,7 +26,7 @@ func InitMemPool(pool *data.MemPool) error {
 		return nil
 	}
 
-	return errors.New("Bad mempool received in graphQL handler")
+	return errors.New("bad mempool received in graphQL handler")
 
 }
 
@@ -39,7 +39,7 @@ func InitRedisClient(client *redis.Client) error {
 		return nil
 	}
 
-	return errors.New("Bad redis client received in graphQL handler")
+	return errors.New("bad redis client received in graphQL handler")
 
 }
 
@@ -92,11 +92,26 @@ func checkAddress(address string) bool {
 
 }
 
-// SubscribeToTopic - Subscribes to Redis topic, with context of caller
-// while waiting for subscription confirmation
-func SubscribeToTopic(ctx context.Context, topic string) (*redis.PubSub, error) {
+// Checks whether received string is valid txHash or not
+func checkHash(hash string) bool {
 
-	_pubsub := redisClient.Subscribe(ctx, topic)
+	reg, err := regexp.Compile(`^(0x\w{64})$`)
+	if err != nil {
+
+		log.Printf("[❗️] Failed to compile regular expression : %s\n", err.Error())
+		return false
+
+	}
+
+	return reg.MatchString(hash)
+
+}
+
+// SubscribeToTopic - Subscribes to Redis topic(s), with context of caller
+// while waiting for subscription confirmation
+func SubscribeToTopic(ctx context.Context, topic ...string) (*redis.PubSub, error) {
+
+	_pubsub := redisClient.Subscribe(ctx, topic...)
 
 	// Waiting for subscription confirmation
 	_, err := _pubsub.Receive(ctx)
@@ -105,6 +120,47 @@ func SubscribeToTopic(ctx context.Context, topic string) (*redis.PubSub, error) 
 	}
 
 	return _pubsub, nil
+
+}
+
+// SubscribeToPendingPool - Subscribes to both topics, associated with changes
+// happening in pending tx pool
+//
+// When tx joins/ leaves pending pool, subscribers will receive notification
+func SubscribeToPendingPool(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic())
+
+}
+
+// SubscribeToQueuedPool - Subscribes to both topics, associated with changes
+// happening in queued tx pool
+//
+// When tx joins/ leaves queued pool, subscribers will receive notification
+//
+// @note Tx(s) generally join queued pool, when there's nonce gap & this tx can't be
+// processed until some lower nonce tx(s) get(s) processed
+func SubscribeToQueuedPool(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic())
+
+}
+
+// SubscribeToMemPool - Subscribes to any changes happening in mempool
+//
+// As mempool has two segments i.e.
+// 1. Pending Pool
+// 2. Queued Pool
+//
+// It'll subscribe to all 4 topics for listening
+// to tx(s) entering/ leaving any portion of mempool
+func SubscribeToMemPool(ctx context.Context) (*redis.PubSub, error) {
+
+	return SubscribeToTopic(ctx,
+		config.GetQueuedTxEntryPublishTopic(),
+		config.GetQueuedTxExitPublishTopic(),
+		config.GetPendingTxEntryPublishTopic(),
+		config.GetPendingTxExitPublishTopic())
 
 }
 
@@ -151,11 +207,18 @@ func SubscribeToQueuedTxExit(ctx context.Context) (*redis.PubSub, error) {
 //
 // You can always blindly return `true` in your `evaluationCriteria` function,
 // so that you get to receive any tx being published on topic of your interest
-func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
+func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
 
 	defer func() {
 		close(comm)
 	}()
+
+	if !(len(topics) > 0) {
+
+		log.Printf("[❗️] Empty topic list was unexpected\n")
+		return
+
+	}
 
 	{
 	OUTER:
@@ -167,16 +230,26 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, c
 
 				// Denotes `harmony` is being shutdown
 				//
-				// We must unsubscribe & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), pubsub, topic)
+				// We must unsubscribe from all topics & get out of this infinite loop
+				ctx := context.Background()
+
+				for _, topic := range topics {
+					UnsubscribeFromTopic(ctx, pubsub, topic)
+				}
+
 				break OUTER
 
 			case <-ctx.Done():
 
 				// Denotes client is not active anymore
 				//
-				// We must unsubscribe & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), pubsub, topic)
+				// We must unsubscribe from all topics & get out of this infinite loop
+				ctx := context.Background()
+
+				for _, topic := range topics {
+					UnsubscribeFromTopic(ctx, pubsub, topic)
+				}
+
 				break OUTER
 
 			case <-time.After(time.Millisecond * time.Duration(300)):
@@ -207,7 +280,7 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topic string, c
 					// of our interest, we'll attempt to deserialize
 					// data to deliver it to client in expected format
 					message := UnmarshalPubSubMessage([]byte(m.Payload))
-					if message != nil && pubCriteria(message, params) {
+					if message != nil && pubCriteria(message, params...) {
 						comm <- message.ToGraphQL()
 					}
 

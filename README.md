@@ -10,31 +10,43 @@ Reduce Chaos in MemPool 😌
 - [How do I get `harmony` up & running ?](#installation)
 - [How do I interact with `harmony` ?](#usage)
 	- [Checking overall status of mempool](#status-of-memPool)
+	- [Catching Any Tx leaving/ joining Mempool](#catching-any-mempool-changes)
+	- [Catching Tx(s) From `A` in Mempool](#catching-txs-from-a-in-mempool)
+	- [Catching Tx(s) To `A` in Mempool](#catching-txs-to-a-in-mempool)
 	- [Inspecting tx(s) in pending pool](#pending-pool)
 		- [Pending For >= `X`](#pending-for-more-than-X)
 		- [Pending For <= `X`](#pending-for-less-than-X)
 		- [Pending From Address `A`](#pending-from-A)
 		- [Pending To Address `A`](#pending-to-A)
 		- [Top `X` Pending Tx(s)](#top-X-pending)
+		- [Pending Duplicate Tx(s)](#pending-duplicate-txs)
 		- [New Pending Tx(s)](#new-pending-txs) **[ WebSocket ]**
 		- [New Confirmed Tx(s)](#new-confirmed-txs) **[ WebSocket ]**
+		- [Catch All Pending Pool Changes](#pending-pool-changes) **[ WebSocket ]**
 		- [New Pending Tx(s) From Address `A`](#new-pending-txs-from) **[ WebSocket ]**
 		- [New Confirmed Tx(s) From Address `A`](#new-confirmed-txs-from) **[ WebSocket ]**
+		- [Catching new pending tx from `A`](#catching-new-pending-tx-from-a) **[ WebSocket ]**
 		- [New Pending Tx(s) To Address `A`](#new-pending-txs-to) **[ WebSocket ]**
 		- [New Confirmed Tx(s) To Address `A`](#new-confirmed-txs-to) **[ WebSocket ]**
+		- [Catching new pending tx to `A`](#catching-new-pending-tx-to-a) **[ WebSocket ]**
 	- [Inspecting tx(s) in queued pool](#queued-pool)
 		- [Queued For >= `X`](#queued-for-more-than-X)
 		- [Queued For <= `X`](#queued-for-less-than-X)
 		- [Queued From Address `A`](#queued-from-A)
 		- [Queued To Address `A`](#queued-to-A)
 		- [Top `X` Queued Tx(s)](#top-X-queued)
+		- [Queued Duplicate Tx(s)](#queued-duplicate-txs)
 		- [New Queued Tx(s)](#new-queued-txs) **[ WebSocket ]**
 		- [New Unstuck Tx(s)](#new-unstuck-txs) **[ WebSocket ]**
+		- [Catch All Queued Pool Changes](#queued-pool-changes) **[ WebSocket ]**
 		- [New Queued Tx(s) From Address `A`](#new-queued-txs-from) **[ WebSocket ]**
 		- [New Unstuck Tx(s) From Address `A`](#new-unstuck-txs-from) **[ WebSocket ]**
+		- [Catching new queued tx from `A`](#catching-new-queued-tx-from-a) **[ WebSocket ]**
 		- [New Queued Tx(s) To Address `A`](#new-queued-txs-to) **[ WebSocket ]**
 		- [New Unstuck Tx(s) To Address `A`](#new-unstuck-txs-to) **[ WebSocket ]**
+		- [Catching new queued tx to `A`](#catching-new-queued-tx-to-a) **[ WebSocket ]**
 - [Any easy to use test ground for API ?](#graphQL-playground)
+- [Do you have any example(s), showing programmatically querying/ subscribing to GraphQL API ?](#graphQL-query-subscription-examples)
 
 ## Motivation
 
@@ -147,6 +159,82 @@ pendingPoolSize | Currently these many tx(s) are in pending state i.e. waiting t
 queuedPoolSize | These tx(s) are stuck, will only be eligible for mining when lower nonce tx(s) of same wallet gets mined
 uptime | This mempool monitoring engine is alive for last `t` time unit
 networkID | The mempool monitoring engine keeps track of mempool of this network
+
+### Catching Any Mempool Changes
+
+Whenever any change in mempool pool happens i.e. tx joins/ leaves pending/ queued pool, subscriber will be notified of those.
+
+- Tx joins queued pool, when it's stuck due to some nonce gap
+- It'll leave queued pool, when it's unstuck & lower nonce tx is processed
+- Tx joins pending pool, when it's ready to be included in next block [ **though might not** ]
+- Tx leaves pool, when tx it has been included in just mined block
+
+Aforementioned changes generally happen in mempool & using following subscription API lets you capture all of those.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  memPool{
+    from
+    to
+    gasPrice
+	pool
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+### Catching Tx(s) From `A` in Mempool
+
+When some new tx joins either of queued/ pending pool & that tx is sent from address `A`, subscriber to be notified of it.
+
+When that tx will leave pool, client to be notified.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxFromAInMemPool{
+    from
+    to
+    gasPrice
+	pool
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+### Catching Tx(s) To `A` in Mempool
+
+When some new tx joins either of queued/ pending pool & that tx is sent to address `A`, subscriber to be notified of it.
+
+When that tx will leave pool, client to be notified.
+
+> Contract creation tx(s) will have empty `to` field
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxToAInMemPool{
+    from
+    to
+    gasPrice
+	pool
+	pendingFor
+	queuedFor
+  }
+}
+```
 
 ### Pending Pool
 
@@ -367,6 +455,34 @@ query {
 
 ---
 
+### Pending Duplicate Tx(s)
+
+Given txHash, attempts to find out duplicate tx(s) present in pending pool.
+
+> Tx is considered to be duplicate, when it has, same sender address & nonce
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  pendingDuplicates(hash: "0x2d17f2941e33afd3a648e3257857ed032191b7b93911364ba4906d640ca69b49") {
+    from
+	to
+  	gas
+  	gasPrice
+  	hash
+  	nonce
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
 ### New pending tx(s)
 
 Listening for any new tx, being added to pending pool, in real-time, over websocket transport
@@ -405,6 +521,30 @@ subscription {
     from
     to
     gasPrice
+  }
+}
+```
+
+---
+
+### Pending Pool Changes
+
+Whenever any change in pending tx pool happens i.e. tx joins/ leaves pool, subscriber will be notified of those
+
+- Tx joins pending pool, when it's ready to be included in next block [ **though might not** ]
+- Tx leaves pool, when tx it has been included in just mined block
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  pendingPool{
+    from
+    to
+    gasPrice
+	pool
   }
 }
 ```
@@ -451,6 +591,28 @@ subscription {
 
 ---
 
+### Catching new pending tx from `A`
+
+When new tx, sent from address `A`, is detected to be entering pending pool, client to be notified. Also when tx will be confirmed, they will be notified, that tx has left pending pool.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxFromAInPendingPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+---
+
 ### New pending tx(s) `to`
 
 When ever any tx is detected to be entering pending pool, where `to` address is matching with specified one, subscriber will be notified of it.
@@ -487,6 +649,28 @@ subscription {
     from
     to
     gasPrice
+  }
+}
+```
+
+---
+
+### Catching new pending tx to `A`
+
+When new tx, where recipient address is `A`, is detected to be entering pending pool, client to be notified. Also when tx will be confirmed, they will be notified, that tx has left pending pool.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxToAInPendingPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
   }
 }
 ```
@@ -683,6 +867,34 @@ query {
 
 ---
 
+### Queued Duplicate Tx(s)
+
+Given txHash, attempts to find out duplicate tx(s) present in queued pool.
+
+> Tx is considered to be duplicate, when it has, same sender address & nonce
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+```graphql
+query {
+  queuedDuplicates(hash: "0x2d17f2941e33afd3a648e3257857ed032191b7b93911364ba4906d640ca69b49") {
+    from
+	to
+  	gas
+  	gasPrice
+  	hash
+  	nonce
+  	pendingFor
+  	queuedFor
+  	pool
+  }
+}
+```
+
+---
+
 ### New queued tx(s)
 
 Listening for any new tx, being added to queued pool, in real-time, over websocket transport
@@ -719,6 +931,30 @@ subscription {
     from
     to
     gasPrice
+  }
+}
+```
+
+---
+
+### Queued Pool Changes
+
+Whenever any change in queued tx pool happens i.e. tx joins/ leaves pool, subscriber will be notified of those
+
+- Tx joins queued pool, due to some issue in sender's account [ **mostly nonce gap** ], because it's not eligible for inclusion in next block to be mined
+- Tx leaves pool, when lower nonce has been filled up & this stuck tx is now ready to get included in block [ **It's unstuck now** ]
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  queuedPool{
+    from
+    to
+    gasPrice
+	pool
   }
 }
 ```
@@ -765,6 +1001,28 @@ subscription {
 
 ---
 
+### Catching new queued tx from `A`
+
+When new tx, from address `A`, is detected to be entering queued pool, client to be notified. Also when that tx will be unstuck, client will be notified, that tx has left queued pool & it's now eligible to enter pending pool & become candidate tx for next block to be mined.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxFromAInQueuedPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+---
+
 ### New queued tx(s) `to`
 
 When ever any tx is detected to be entering queued pool _( because they're stuck due to nonce gap )_, where `to` address is matching with specified one, subscriber will be notified of it.
@@ -803,6 +1061,28 @@ subscription {
 }
 ```
 
+---
+
+### Catching new queued tx to `A`
+
+When new tx, targeted to address `A`, is detected to be entering queued pool, client to be notified. Also when tx will be unstuck, they will be notified, that tx has left queued pool & it's now eligible to enter pending pool & become candidate tx for next block to be mined.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxToAInQueuedPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
+  }
+}
+```
+
 ## GraphQL Playground
 
 `harmony` packs one graphQL playground for you, where you can play around with both `query` & `subscription` methods.
@@ -812,6 +1092,46 @@ subscription {
 ![graphql_playground](./sc/gql_playground.png)
 
 URI : `https://<base-url>/v1/graphql-playground`
+
+## GraphQL Query/ Subscription Examples
+
+I've written some examples for programmatically querying GraphQL API over HTTP & subscribing to topics for listening to MemPool state changes in real-time, over Websocket transport.
+
+![gql_subscription_example](./sc/gql_subscription_example.gif)
+
+You can find those [here](./examples). Before you run those
+
+- Make sure you've Python3 installed. They're tested to be working on `Python 3.9.2`
+- Let's first enable virtual environment, by doing
+
+```bash
+cd examples
+python3 -m venv venv
+source venv/bin/activate
+```
+
+- We can now fetch dependencies, by doing
+
+```bash
+pip install -r requirements.txt
+```
+
+- You can now run any of examples, by doing
+
+
+```bash
+python3 query.py
+python3 subscribe_1.py
+```
+
+> Make sure, you've access to `harmony` node.
+
+- Finally when you're done, you can get out of virtual environment
+
+
+```bash
+deactivate
+```
 
 ---
 > Note: `harmony` is not recommended for use in production environment at time of writing this. It's under active development.

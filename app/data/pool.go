@@ -21,6 +21,18 @@ type MemPool struct {
 	Queued  *QueuedPool
 }
 
+// PendingDuplicates - Find duplicate tx(s), given txHash, present
+// in pending mempool
+func (m *MemPool) PendingDuplicates(hash common.Hash) []*MemPoolTx {
+	return m.Pending.DuplicateTxs(hash)
+}
+
+// QueuedDuplicates - Find duplicate tx(s), given txHash, present
+// in queued mempool
+func (m *MemPool) QueuedDuplicates(hash common.Hash) []*MemPoolTx {
+	return m.Queued.DuplicateTxs(hash)
+}
+
 // PendingPoolLength - Returning current pending tx queue length
 func (m *MemPool) PendingPoolLength() uint64 {
 	return m.Pending.Count()

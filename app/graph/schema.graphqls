@@ -33,6 +33,9 @@ type Query {
 
   topXPendingWithLowGasPrice(x: Int!): [MemPoolTx!]!
   topXQueuedWithLowGasPrice(x: Int!): [MemPoolTx!]!
+
+  pendingDuplicates(hash: String!): [MemPoolTx!]!
+  queuedDuplicates(hash: String!): [MemPoolTx!]!
 }
 
 type Subscription {
@@ -42,15 +45,28 @@ type Subscription {
   newConfirmedTx: MemPoolTx!
   newUnstuckTx: MemPoolTx!
 
+  pendingPool: MemPoolTx!
+  queuedPool: MemPoolTx!
+
+  memPool: MemPoolTx!
+
   newPendingTxFrom(address: String!): MemPoolTx!
   newQueuedTxFrom(address: String!): MemPoolTx!
 
   newConfirmedTxFrom(address: String!): MemPoolTx!
   newUnstuckTxFrom(address: String!): MemPoolTx!
 
+  newTxFromAInPendingPool(address: String!): MemPoolTx!
+  newTxFromAInQueuedPool(address: String!): MemPoolTx!
+  newTxFromAInMemPool(address: String!): MemPoolTx!
+
   newPendingTxTo(address: String!): MemPoolTx!
   newQueuedTxTo(address: String!): MemPoolTx!
 
   newConfirmedTxTo(address: String!): MemPoolTx!
   newUnstuckTxTo(address: String!): MemPoolTx!
+
+  newTxToAInPendingPool(address: String!): MemPoolTx!
+  newTxToAInQueuedPool(address: String!): MemPoolTx!
+  newTxToAInMemPool(address: String!): MemPoolTx!
 }
