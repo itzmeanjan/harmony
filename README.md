@@ -11,6 +11,8 @@ Reduce Chaos in MemPool 😌
 - [How do I interact with `harmony` ?](#usage)
 	- [Checking overall status of mempool](#status-of-memPool)
 	- [Catching Any Tx leaving/ joining Mempool](#catching-any-mempool-changes)
+	- [Catching Tx(s) From `A` in Mempool](#catching-txs-from-a-in-mempool)
+	- [Catching Tx(s) To `A` in Mempool](#catching-txs-to-a-in-mempool)
 	- [Inspecting tx(s) in pending pool](#pending-pool)
 		- [Pending For >= `X`](#pending-for-more-than-X)
 		- [Pending For <= `X`](#pending-for-less-than-X)
@@ -23,8 +25,10 @@ Reduce Chaos in MemPool 😌
 		- [Catch All Pending Pool Changes](#pending-pool-changes) **[ WebSocket ]**
 		- [New Pending Tx(s) From Address `A`](#new-pending-txs-from) **[ WebSocket ]**
 		- [New Confirmed Tx(s) From Address `A`](#new-confirmed-txs-from) **[ WebSocket ]**
+		- [Catching new pending tx from `A`](#catching-new-pending-tx-from-a) **[ WebSocket ]**
 		- [New Pending Tx(s) To Address `A`](#new-pending-txs-to) **[ WebSocket ]**
 		- [New Confirmed Tx(s) To Address `A`](#new-confirmed-txs-to) **[ WebSocket ]**
+		- [Catching new pending tx to `A`](#catching-new-pending-tx-to-a) **[ WebSocket ]**
 	- [Inspecting tx(s) in queued pool](#queued-pool)
 		- [Queued For >= `X`](#queued-for-more-than-X)
 		- [Queued For <= `X`](#queued-for-less-than-X)
@@ -37,8 +41,10 @@ Reduce Chaos in MemPool 😌
 		- [Catch All Queued Pool Changes](#queued-pool-changes) **[ WebSocket ]**
 		- [New Queued Tx(s) From Address `A`](#new-queued-txs-from) **[ WebSocket ]**
 		- [New Unstuck Tx(s) From Address `A`](#new-unstuck-txs-from) **[ WebSocket ]**
+		- [Catching new queued tx from `A`](#catching-new-queued-tx-from-a) **[ WebSocket ]**
 		- [New Queued Tx(s) To Address `A`](#new-queued-txs-to) **[ WebSocket ]**
 		- [New Unstuck Tx(s) To Address `A`](#new-unstuck-txs-to) **[ WebSocket ]**
+		- [Catching new queued tx to `A`](#catching-new-queued-tx-to-a) **[ WebSocket ]**
 - [Any easy to use test ground for API ?](#graphQL-playground)
 - [Do you have any example(s), showing programmatically querying/ subscribing to GraphQL API ?](#graphQL-query-subscription-examples)
 
@@ -172,6 +178,54 @@ URL : **/v1/graphql**
 ```graphql
 subscription {
   memPool{
+    from
+    to
+    gasPrice
+	pool
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+### Catching Tx(s) From `A` in Mempool
+
+When some new tx joins either of queued/ pending pool & that tx is sent from address `A`, subscriber to be notified of it.
+
+When that tx will leave pool, client to be notified.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxFromAInMemPool{
+    from
+    to
+    gasPrice
+	pool
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+### Catching Tx(s) To `A` in Mempool
+
+When some new tx joins either of queued/ pending pool & that tx is sent to address `A`, subscriber to be notified of it.
+
+When that tx will leave pool, client to be notified.
+
+> Contract creation tx(s) will have empty `to` field
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxToAInMemPool{
     from
     to
     gasPrice
@@ -537,6 +591,28 @@ subscription {
 
 ---
 
+### Catching new pending tx from `A`
+
+When new tx, sent from address `A`, is detected to be entering pending pool, client to be notified. Also when tx will be confirmed, they will be notified, that tx has left pending pool.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxFromAInPendingPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+---
+
 ### New pending tx(s) `to`
 
 When ever any tx is detected to be entering pending pool, where `to` address is matching with specified one, subscriber will be notified of it.
@@ -573,6 +649,28 @@ subscription {
     from
     to
     gasPrice
+  }
+}
+```
+
+---
+
+### Catching new pending tx to `A`
+
+When new tx, where recipient address is `A`, is detected to be entering pending pool, client to be notified. Also when tx will be confirmed, they will be notified, that tx has left pending pool.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxToAInPendingPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
   }
 }
 ```
@@ -903,6 +1001,28 @@ subscription {
 
 ---
 
+### Catching new queued tx from `A`
+
+When new tx, from address `A`, is detected to be entering queued pool, client to be notified. Also when that tx will be unstuck, client will be notified, that tx has left queued pool & it's now eligible to enter pending pool & become candidate tx for next block to be mined.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxFromAInQueuedPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
+  }
+}
+```
+
+---
+
 ### New queued tx(s) `to`
 
 When ever any tx is detected to be entering queued pool _( because they're stuck due to nonce gap )_, where `to` address is matching with specified one, subscriber will be notified of it.
@@ -937,6 +1057,28 @@ subscription {
     from
     to
     gasPrice
+  }
+}
+```
+
+---
+
+### Catching new queued tx to `A`
+
+When new tx, targeted to address `A`, is detected to be entering queued pool, client to be notified. Also when tx will be unstuck, they will be notified, that tx has left queued pool & it's now eligible to enter pending pool & become candidate tx for next block to be mined.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  newTxToAInQueuedPool(address: "0x63ec5767F54F6943750A70eB6117EA2D9Ca77313"){
+    from
+    to
+    gasPrice
+	pendingFor
+	queuedFor
   }
 }
 ```
