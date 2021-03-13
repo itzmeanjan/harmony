@@ -213,7 +213,7 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 		close(comm)
 	}()
 
-	if !(topics != nil && len(topics) > 0) {
+	if !(len(topics) > 0) {
 
 		log.Printf("[❗️] Empty topic list was unexpected\n")
 		return

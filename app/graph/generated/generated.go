@@ -79,21 +79,24 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
-		MemPool            func(childComplexity int) int
-		NewConfirmedTx     func(childComplexity int) int
-		NewConfirmedTxFrom func(childComplexity int, address string) int
-		NewConfirmedTxTo   func(childComplexity int, address string) int
-		NewPendingTx       func(childComplexity int) int
-		NewPendingTxFrom   func(childComplexity int, address string) int
-		NewPendingTxTo     func(childComplexity int, address string) int
-		NewQueuedTx        func(childComplexity int) int
-		NewQueuedTxFrom    func(childComplexity int, address string) int
-		NewQueuedTxTo      func(childComplexity int, address string) int
-		NewUnstuckTx       func(childComplexity int) int
-		NewUnstuckTxFrom   func(childComplexity int, address string) int
-		NewUnstuckTxTo     func(childComplexity int, address string) int
-		PendingPool        func(childComplexity int) int
-		QueuedPool         func(childComplexity int) int
+		MemPool                 func(childComplexity int) int
+		NewConfirmedTx          func(childComplexity int) int
+		NewConfirmedTxFrom      func(childComplexity int, address string) int
+		NewConfirmedTxTo        func(childComplexity int, address string) int
+		NewPendingTx            func(childComplexity int) int
+		NewPendingTxFrom        func(childComplexity int, address string) int
+		NewPendingTxTo          func(childComplexity int, address string) int
+		NewQueuedTx             func(childComplexity int) int
+		NewQueuedTxFrom         func(childComplexity int, address string) int
+		NewQueuedTxTo           func(childComplexity int, address string) int
+		NewTxFromAInMemPool     func(childComplexity int, address string) int
+		NewTxFromAInPendingPool func(childComplexity int, address string) int
+		NewTxFromAInQueuedPool  func(childComplexity int, address string) int
+		NewUnstuckTx            func(childComplexity int) int
+		NewUnstuckTxFrom        func(childComplexity int, address string) int
+		NewUnstuckTxTo          func(childComplexity int, address string) int
+		PendingPool             func(childComplexity int) int
+		QueuedPool              func(childComplexity int) int
 	}
 }
 
@@ -125,6 +128,9 @@ type SubscriptionResolver interface {
 	NewQueuedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
 	NewConfirmedTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
 	NewUnstuckTxFrom(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
+	NewTxFromAInPendingPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
+	NewTxFromAInQueuedPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
+	NewTxFromAInMemPool(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
 	NewPendingTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
 	NewQueuedTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
 	NewConfirmedTxTo(ctx context.Context, address string) (<-chan *model.MemPoolTx, error)
@@ -512,6 +518,42 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Subscription.NewQueuedTxTo(childComplexity, args["address"].(string)), true
 
+	case "Subscription.newTxFromAInMemPool":
+		if e.complexity.Subscription.NewTxFromAInMemPool == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_newTxFromAInMemPool_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.NewTxFromAInMemPool(childComplexity, args["address"].(string)), true
+
+	case "Subscription.newTxFromAInPendingPool":
+		if e.complexity.Subscription.NewTxFromAInPendingPool == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_newTxFromAInPendingPool_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.NewTxFromAInPendingPool(childComplexity, args["address"].(string)), true
+
+	case "Subscription.newTxFromAInQueuedPool":
+		if e.complexity.Subscription.NewTxFromAInQueuedPool == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_newTxFromAInQueuedPool_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.NewTxFromAInQueuedPool(childComplexity, args["address"].(string)), true
+
 	case "Subscription.newUnstuckTx":
 		if e.complexity.Subscription.NewUnstuckTx == nil {
 			break
@@ -681,6 +723,10 @@ type Subscription {
 
   newConfirmedTxFrom(address: String!): MemPoolTx!
   newUnstuckTxFrom(address: String!): MemPoolTx!
+
+  newTxFromAInPendingPool(address: String!): MemPoolTx!
+  newTxFromAInQueuedPool(address: String!): MemPoolTx!
+  newTxFromAInMemPool(address: String!): MemPoolTx!
 
   newPendingTxTo(address: String!): MemPoolTx!
   newQueuedTxTo(address: String!): MemPoolTx!
@@ -997,6 +1043,51 @@ func (ec *executionContext) field_Subscription_newQueuedTxFrom_args(ctx context.
 }
 
 func (ec *executionContext) field_Subscription_newQueuedTxTo_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["address"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("address"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["address"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_newTxFromAInMemPool_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["address"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("address"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["address"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_newTxFromAInPendingPool_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["address"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("address"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["address"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_newTxFromAInQueuedPool_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
@@ -2751,6 +2842,162 @@ func (ec *executionContext) _Subscription_newUnstuckTxFrom(ctx context.Context, 
 	}
 }
 
+func (ec *executionContext) _Subscription_newTxFromAInPendingPool(ctx context.Context, field graphql.CollectedField) (ret func() graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Subscription_newTxFromAInPendingPool_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().NewTxFromAInPendingPool(rctx, args["address"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func() graphql.Marshaler {
+		res, ok := <-resTmp.(<-chan *model.MemPoolTx)
+		if !ok {
+			return nil
+		}
+		return graphql.WriterFunc(func(w io.Writer) {
+			w.Write([]byte{'{'})
+			graphql.MarshalString(field.Alias).MarshalGQL(w)
+			w.Write([]byte{':'})
+			ec.marshalNMemPoolTx2ᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTx(ctx, field.Selections, res).MarshalGQL(w)
+			w.Write([]byte{'}'})
+		})
+	}
+}
+
+func (ec *executionContext) _Subscription_newTxFromAInQueuedPool(ctx context.Context, field graphql.CollectedField) (ret func() graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Subscription_newTxFromAInQueuedPool_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().NewTxFromAInQueuedPool(rctx, args["address"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func() graphql.Marshaler {
+		res, ok := <-resTmp.(<-chan *model.MemPoolTx)
+		if !ok {
+			return nil
+		}
+		return graphql.WriterFunc(func(w io.Writer) {
+			w.Write([]byte{'{'})
+			graphql.MarshalString(field.Alias).MarshalGQL(w)
+			w.Write([]byte{':'})
+			ec.marshalNMemPoolTx2ᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTx(ctx, field.Selections, res).MarshalGQL(w)
+			w.Write([]byte{'}'})
+		})
+	}
+}
+
+func (ec *executionContext) _Subscription_newTxFromAInMemPool(ctx context.Context, field graphql.CollectedField) (ret func() graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Subscription_newTxFromAInMemPool_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().NewTxFromAInMemPool(rctx, args["address"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func() graphql.Marshaler {
+		res, ok := <-resTmp.(<-chan *model.MemPoolTx)
+		if !ok {
+			return nil
+		}
+		return graphql.WriterFunc(func(w io.Writer) {
+			w.Write([]byte{'{'})
+			graphql.MarshalString(field.Alias).MarshalGQL(w)
+			w.Write([]byte{':'})
+			ec.marshalNMemPoolTx2ᚖgithubᚗcomᚋitzmeanjanᚋharmonyᚋappᚋgraphᚋmodelᚐMemPoolTx(ctx, field.Selections, res).MarshalGQL(w)
+			w.Write([]byte{'}'})
+		})
+	}
+}
+
 func (ec *executionContext) _Subscription_newPendingTxTo(ctx context.Context, field graphql.CollectedField) (ret func() graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -4407,6 +4654,12 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_newConfirmedTxFrom(ctx, fields[0])
 	case "newUnstuckTxFrom":
 		return ec._Subscription_newUnstuckTxFrom(ctx, fields[0])
+	case "newTxFromAInPendingPool":
+		return ec._Subscription_newTxFromAInPendingPool(ctx, fields[0])
+	case "newTxFromAInQueuedPool":
+		return ec._Subscription_newTxFromAInQueuedPool(ctx, fields[0])
+	case "newTxFromAInMemPool":
+		return ec._Subscription_newTxFromAInMemPool(ctx, fields[0])
 	case "newPendingTxTo":
 		return ec._Subscription_newPendingTxTo(ctx, fields[0])
 	case "newQueuedTxTo":
