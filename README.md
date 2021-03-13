@@ -10,6 +10,7 @@ Reduce Chaos in MemPool 😌
 - [How do I get `harmony` up & running ?](#installation)
 - [How do I interact with `harmony` ?](#usage)
 	- [Checking overall status of mempool](#status-of-memPool)
+	- [Catching Any Tx leaving/ joining Mempool](#catching-any-mempool-changes)
 	- [Inspecting tx(s) in pending pool](#pending-pool)
 		- [Pending For >= `X`](#pending-for-more-than-X)
 		- [Pending For <= `X`](#pending-for-less-than-X)
@@ -152,6 +153,34 @@ pendingPoolSize | Currently these many tx(s) are in pending state i.e. waiting t
 queuedPoolSize | These tx(s) are stuck, will only be eligible for mining when lower nonce tx(s) of same wallet gets mined
 uptime | This mempool monitoring engine is alive for last `t` time unit
 networkID | The mempool monitoring engine keeps track of mempool of this network
+
+### Catching Any Mempool Changes
+
+Whenever any change in mempool pool happens i.e. tx joins/ leaves pending/ queued pool, subscriber will be notified of those.
+
+- Tx joins queued pool, when it's stuck due to some nonce gap
+- It'll leave queued pool, when it's unstuck & lower nonce tx is processed
+- Tx joins pending pool, when it's ready to be included in next block [ **though might not** ]
+- Tx leaves pool, when tx it has been included in just mined block
+
+Aforementioned changes generally happen in mempool & using following subscription API lets you capture all of those.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+  memPool{
+    from
+    to
+    gasPrice
+	pool
+	pendingFor
+	queuedFor
+  }
+}
+```
 
 ### Pending Pool
 
