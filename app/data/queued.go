@@ -22,6 +22,7 @@ import (
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
 	Transactions map[common.Hash]*MemPoolTx
+	SortedTxs    MemPoolTxsDesc
 	Lock         *sync.RWMutex
 }
 
@@ -472,5 +473,30 @@ func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs ma
 	}
 
 	return count
+
+}
+
+// SortTxs - Keeping sort entries in tx list
+// for tx(s) currently living in queued pool, where sorting
+// is being done as per gas price paid by tx senders
+//
+// @note This function is supposed to be invoked every time you add
+// any new tx to queued pool
+func (q *QueuedPool) SortTxs() bool {
+
+	txs := MemPoolTxsDesc(q.ListTxs())
+
+	if len(txs) == 0 {
+		return false
+	}
+
+	sort.Sort(&txs)
+
+	q.Lock.Lock()
+	defer q.Lock.Unlock()
+
+	q.SortedTxs = txs
+
+	return true
 
 }

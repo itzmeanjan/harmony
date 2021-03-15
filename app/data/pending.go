@@ -442,9 +442,6 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 // new tx(s) to pending pool
 func (p *PendingPool) SortTxs() bool {
 
-	p.Lock.Lock()
-	defer p.Lock.Unlock()
-
 	txs := MemPoolTxsDesc(p.ListTxs())
 
 	if len(txs) == 0 {
@@ -452,6 +449,10 @@ func (p *PendingPool) SortTxs() bool {
 	}
 
 	sort.Sort(&txs)
+
+	p.Lock.Lock()
+	defer p.Lock.Unlock()
+
 	p.SortedTxs = txs
 
 	return true
