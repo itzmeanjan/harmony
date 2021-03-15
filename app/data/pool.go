@@ -118,20 +118,29 @@ func (m *MemPool) TopXQueuedWithLowGasPrice(x uint64) []*MemPoolTx {
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
 func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
+	start := time.Now().UTC()
 	if v := m.Queued.RemoveUnstuck(ctx, rpc, pubsub, m.Pending, pending, queued); v != 0 {
-		log.Printf("[➖] Removed %d unstuck tx(s) from queued tx pool\n", v)
+		log.Printf("[➖] Removed %d unstuck tx(s) from queued tx pool, in %s\n", v, time.Now().UTC().Sub(start))
 	}
 
+	start = time.Now().UTC()
 	if v := m.Queued.AddQueued(ctx, pubsub, queued); v != 0 {
-		log.Printf("[➕] Added %d tx(s) to queued tx pool\n", v)
+		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", v, time.Now().UTC().Sub(start))
 	}
 
+	start = time.Now().UTC()
 	if v := m.Pending.RemoveConfirmed(ctx, rpc, pubsub, pending); v != 0 {
-		log.Printf("[➖] Removed %d confirmed tx(s) from pending tx pool\n", v)
+		log.Printf("[➖] Removed %d confirmed tx(s) from pending tx pool, in %s\n", v, time.Now().UTC().Sub(start))
 	}
 
+	start = time.Now().UTC()
 	if v := m.Pending.AddPendings(ctx, pubsub, pending); v != 0 {
-		log.Printf("[➕] Added %d tx(s) to pending tx pool\n", v)
+		log.Printf("[➕] Added %d tx(s) to pending tx pool, in %s\n", v, time.Now().UTC().Sub(start))
+	}
+
+	start = time.Now().UTC()
+	if m.Pending.SortTxs() {
+		log.Printf("[➕] Sorted pending pool tx(s), in %s\n", time.Now().UTC().Sub(start))
 	}
 
 }
