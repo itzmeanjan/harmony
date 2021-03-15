@@ -18,6 +18,7 @@ import (
 // be mined in next block
 type PendingPool struct {
 	Transactions map[common.Hash]*MemPoolTx
+	SortedTxs    MemPoolTxsDesc
 	Lock         *sync.RWMutex
 }
 
@@ -433,5 +434,28 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 	}
 
 	return count
+
+}
+
+// SortTxs - Sorts current pending tx list ascendingly
+// as per gas price paid by senders
+//
+// @note This is supposed to be invoked after every time you add
+// new tx(s) to pending pool
+func (p *PendingPool) SortTxs() bool {
+
+	p.Lock.Lock()
+	defer p.Lock.Unlock()
+
+	txs := MemPoolTxsDesc(p.ListTxs())
+
+	if len(txs) == 0 {
+		return false
+	}
+
+	sort.Sort(&txs)
+	p.SortedTxs = txs
+
+	return true
 
 }
