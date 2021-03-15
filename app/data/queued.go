@@ -102,15 +102,14 @@ func (q *QueuedPool) ListTxs() []*MemPoolTx {
 // where being top is determined by how much gas price paid by tx sender
 func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 
-	txs := MemPoolTxsDesc(q.ListTxs())
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
 
-	if len(txs) == 0 {
-		return txs
+	if txs := q.SortedTxs; txs != nil {
+		return txs[:x]
 	}
 
-	sort.Sort(&txs)
-
-	return txs[:x]
+	return nil
 
 }
 
@@ -118,15 +117,14 @@ func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 // where being top is determined by how low gas price paid by tx sender
 func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 
-	txs := MemPoolTxsAsc(q.ListTxs())
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
 
-	if len(txs) == 0 {
-		return txs
+	if txs := q.SortedTxs; txs != nil {
+		return txs[len(txs)-int(x):]
 	}
 
-	sort.Sort(&txs)
-
-	return txs[:x]
+	return nil
 
 }
 
