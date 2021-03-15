@@ -131,9 +131,9 @@ func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
+	result := make([]*MemPoolTx, 0, len(p.SortedTxs))
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.SortedTxs {
 
 		if tx.IsSentFrom(address) {
 			result = append(result, tx)
@@ -152,9 +152,9 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
+	result := make([]*MemPoolTx, 0, len(p.SortedTxs))
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.SortedTxs {
 
 		if tx.IsSentTo(address) {
 			result = append(result, tx)

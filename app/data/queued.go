@@ -135,9 +135,9 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
+	result := make([]*MemPoolTx, 0, len(q.SortedTxs))
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.SortedTxs {
 
 		if tx.IsSentFrom(address) {
 			result = append(result, tx)
@@ -156,9 +156,9 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
+	result := make([]*MemPoolTx, 0, len(q.SortedTxs))
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.SortedTxs {
 
 		if tx.IsSentTo(address) {
 			result = append(result, tx)
