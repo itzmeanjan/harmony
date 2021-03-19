@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"io"
+	"log"
 	mrand "math/rand"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	libp2ptls "github.com/libp2p/go-libp2p-tls"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // CreateHost - Creates a libp2p host, to be used for communicating
@@ -40,8 +42,8 @@ func CreateHost(ctx context.Context) (host.Host, error) {
 	identity := libp2p.Identity(priv)
 
 	addrs := libp2p.ListenAddrStrings([]string{
-		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", config.GetNetworkingPort()),
-		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/ws", config.GetNetworkingPort()),
+		fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", config.GetNetworkingPort()),
+		fmt.Sprintf("/ip4/127.0.0.1/tcp/%d/ws", config.GetNetworkingPort()),
 	}...)
 
 	security := libp2p.Security(libp2ptls.ID, libp2ptls.New)
@@ -53,5 +55,18 @@ func CreateHost(ctx context.Context) (host.Host, error) {
 	opts := []libp2p.Option{identity, addrs, security, transports, connManager}
 
 	return libp2p.New(ctx, opts...)
+
+}
+
+// ShowHost - Showing on which multi addresses given host is listening on
+func ShowHost(_host host.Host) {
+
+	hostAddr, _ := ma.NewMultiaddr(fmt.Sprintf("/ipfs/%s", _host.ID().Pretty()))
+
+	for _, addr := range _host.Addrs() {
+
+		log.Printf("📞 Listening on : %s\n", addr.Encapsulate(hostAddr))
+
+	}
 
 }

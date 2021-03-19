@@ -20,6 +20,7 @@ require (
 	github.com/libp2p/go-libp2p-tls v0.1.3
 	github.com/magiconair/properties v1.8.4 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
+	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/pelletier/go-toml v1.8.1 // indirect
 	github.com/shirou/gopsutil v3.21.2+incompatible // indirect
 	github.com/spf13/afero v1.5.1 // indirect
