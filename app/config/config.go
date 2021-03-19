@@ -200,3 +200,16 @@ func GetBootstrapPeer() string {
 	return Get("NetworkingBootstrap")
 
 }
+
+// GetNetworkingRendezvous - This is the string with which harmony nodes will advertise
+// them with & this node will attempt to find other peers of same kind using this string
+func GetNetworkingRendezvous() string {
+
+	if v := Get("NetworkingRendezvous"); len(v) != 0 {
+		return v
+	}
+
+	log.Printf("[❗️] Failed to get libp2p networking rendezvous, using `harmony`\n")
+	return "harmony"
+
+}

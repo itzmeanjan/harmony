@@ -1,12 +1,15 @@
 package networking
 
 import (
+	"bufio"
 	"context"
 	"log"
 
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
+	discovery "github.com/libp2p/go-libp2p-discovery"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -90,7 +93,9 @@ func ConnectToBootstraps(ctx context.Context, _host host.Host) (int, int) {
 
 }
 
-// SetUpPeerDiscovery - ...
+// SetUpPeerDiscovery - Setting up peer discovery mechanism, by connecting
+// to bootstrap nodes first, then advertises self with rendezvous & attempts to
+// discover peers with same rendezvous, which are to be eventually connected with
 func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
 
 	_dht, err := dht.New(ctx, _host)
@@ -105,6 +110,44 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
 
 		log.Printf("[❗️] Failed to keep refreshing DHT : %s\n", err.Error())
 		return
+
+	}
+
+	connected, total := ConnectToBootstraps(ctx, _host)
+	log.Printf("✅ Connected to %d/ %d bootstrap nodes\n", connected, total)
+
+	routingDiscovery := discovery.NewRoutingDiscovery(_dht)
+	discovery.Advertise(ctx, routingDiscovery, config.GetNetworkingRendezvous())
+	log.Printf("✅ Advertised self with rendezvous\n")
+
+	peerChan, err := routingDiscovery.FindPeers(ctx, config.GetNetworkingRendezvous())
+	if err != nil {
+
+		log.Printf("[❗️] Failed to start finding peers : %s\n", err.Error())
+		return
+
+	}
+
+	// Keep listening for new peers found
+	for found := range peerChan {
+
+		// this is me 😅
+		if found.ID == _host.ID() {
+			continue
+		}
+
+		stream, err := _host.NewStream(ctx, found.ID, protocol.ID(config.GetNetworkingStream()))
+		if err != nil {
+
+			log.Printf("[❗️] Failed to connect to discovered peer : %s\n", err.Error())
+			continue
+
+		}
+
+		// @note Handle stream i.e. read from & write to updates
+		bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+		log.Printf("✅ Connected to new peer\n")
 
 	}
 
