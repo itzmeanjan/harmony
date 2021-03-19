@@ -171,12 +171,11 @@ func GetNetworkingPort() uint64 {
 // getting same peer id
 //
 // @note This is to be used for generating random number, over restarts
+//
+// Consider using something > 0, otherwise cryptographically strong source of
+// randomness to be used
 func GetNetworkingSeed() uint64 {
 
-	if seed := GetUint("NetworkingSeed"); seed != 0 {
-		return seed
-	}
-
-	return 1
+	return GetUint("NetworkingSeed")
 
 }

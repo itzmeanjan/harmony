@@ -13,8 +13,9 @@ require (
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/go-redis/redis/v8 v8.7.0
 	github.com/gorilla/websocket v1.4.2
-	github.com/kr/pretty v0.2.0 // indirect
 	github.com/labstack/echo/v4 v4.2.0
+	github.com/libp2p/go-libp2p v0.13.0
+	github.com/libp2p/go-libp2p-core v0.8.0
 	github.com/magiconair/properties v1.8.4 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/pelletier/go-toml v1.8.1 // indirect
