@@ -154,3 +154,29 @@ func GetPortNumber() uint64 {
 	return 7000
 
 }
+
+// GetNetworkingPort - Libp2p service to be run on this port, used
+// for communicating with peers over P2P network
+func GetNetworkingPort() uint64 {
+
+	if port := GetUint("NetworkingPort"); port > 1024 {
+		return port
+	}
+
+	return 7001
+
+}
+
+// GetNetworkingSeed - Optional param can be used during development for
+// getting same peer id
+//
+// @note This is to be used for generating random number, over restarts
+func GetNetworkingSeed() uint64 {
+
+	if seed := GetUint("NetworkingSeed"); seed != 0 {
+		return seed
+	}
+
+	return 1
+
+}
