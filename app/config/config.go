@@ -179,3 +179,16 @@ func GetNetworkingSeed() uint64 {
 	return GetUint("NetworkingSeed")
 
 }
+
+// GetNetworkingStream - Libp2p stream name, to be for listening on this
+// & also sending messages when communicating with peer
+func GetNetworkingStream() string {
+
+	if v := Get("NetworkingStream"); len(v) != 0 {
+		return v
+	}
+
+	log.Printf("[❗️] Failed to get libp2p networking stream name, using `/harmony/v1.0.0`\n")
+	return "/harmony/v1.0.0"
+
+}
