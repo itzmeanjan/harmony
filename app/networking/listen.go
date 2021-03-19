@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"log"
+	"time"
 
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -11,13 +12,51 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
-// ReadFrom - ...
-func ReadFrom(ctx context.Context, rw *bufio.ReadWriter) {
+// ReadFrom - Read from stream
+func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
+
+	defer cancel()
+
+	for {
+
+		// @note Delimiter needs to be defined
+		data, err := rw.ReadBytes('\n')
+		if err != nil {
+
+			log.Printf("[❗️] Failed to read from stream : %s\n", err.Error())
+			break
+
+		}
+
+		log.Printf("✅ Received from peer : %s\n", string(data))
+
+	}
 
 }
 
-// WriteTo - ...
-func WriteTo(ctx context.Context, rw *bufio.ReadWriter) {
+// WriteTo - Write to stream
+func WriteTo(cancel context.CancelFunc, rw *bufio.ReadWriter) {
+
+	defer cancel()
+
+	for {
+
+		// @note Do something meaningful
+		_, err := rw.Write([]byte("harmony\n"))
+		if err != nil {
+
+			log.Printf("[❗️] Failed to write to stream : %s\n", err.Error())
+			break
+
+		}
+
+		if err := rw.Flush(); err != nil {
+
+			log.Printf("[❗️] Failed to flush stream write buffer : %s\n", err.Error())
+			break
+		}
+
+	}
 
 }
 
@@ -30,17 +69,15 @@ func Listen(_host host.Host) {
 		ctx, cancel := context.WithCancel(context.Background())
 		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
-		go ReadFrom(ctx, rw)
-		go WriteTo(ctx, rw)
+		go ReadFrom(cancel, rw)
+		go WriteTo(cancel, rw)
 
 		log.Printf("🤩 Got new stream from peer\n")
 
 		// @note This is a blocking call
 		<-ctx.Done()
+		<-time.After(time.Duration(100) * time.Millisecond)
 
-		// Letting both reader/ writer know, they must stop working
-		// as they run is different go routine
-		cancel()
 		// Closing stream, may be it's already closed
 		if err := stream.Close(); err != nil {
 
