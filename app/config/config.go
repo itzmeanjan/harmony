@@ -192,3 +192,11 @@ func GetNetworkingStream() string {
 	return "/harmony/v1.0.0"
 
 }
+
+// GetBootstrapPeer - Attempts to get user supplied bootstrap node identifier
+// so that this node can connect to it
+func GetBootstrapPeer() string {
+
+	return Get("NetworkingBootstrap")
+
+}
