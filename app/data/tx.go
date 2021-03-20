@@ -144,6 +144,23 @@ func (m *MemPoolTx) IsQueuedForLTE(x time.Duration) bool {
 
 }
 
+// IsDropped - Attempts to check whether this tx was dropped by node or not
+//
+// Dropping can happen due to higher priority tx from same account with same nonce
+// was encountered
+func (m *MemPoolTx) IsDropped(ctx context.Context, rpc *rpc.Client) (bool, error) {
+
+	var result interface{}
+
+	if err := rpc.CallContext(ctx, &result, "eth_getTransactionReceipt", m.Hash.Hex()); err != nil {
+		return true, err
+	}
+
+	// tx receipt exists, meaning, tx got mined
+	return false, nil
+
+}
+
 // IsNonceExhausted - Multiple tx(s) of same/ different value
 // can be sent to network with same nonce, where one of them
 // which seems most profitable to miner, will be picked up, while mining next block
