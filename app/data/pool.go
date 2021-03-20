@@ -21,6 +21,32 @@ type MemPool struct {
 	Queued  *QueuedPool
 }
 
+// Get - Given a txhash, attempts to find out tx, if
+// present in any of pending/ queued pool
+func (m *MemPool) Get(hash common.Hash) *MemPoolTx {
+
+	queued := m.Queued.Get(hash)
+	if queued != nil {
+		return queued
+	}
+
+	return m.Pending.Get(hash)
+
+}
+
+// Exists - Given a txHash, attempts to check whether this tx is present
+// in either of pending/ queued pool
+func (m *MemPool) Exists(hash common.Hash) bool {
+
+	queued := m.Queued.Exists(hash)
+	if queued {
+		return queued
+	}
+
+	return m.Pending.Exists(hash)
+
+}
+
 // PendingDuplicates - Find duplicate tx(s), given txHash, present
 // in pending mempool
 func (m *MemPool) PendingDuplicates(hash common.Hash) []*MemPoolTx {
