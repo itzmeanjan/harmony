@@ -285,22 +285,28 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 
 // Remove - Removes already existing tx from pending tx pool
 // denoting it has been mined i.e. confirmed
-func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txHash common.Hash) bool {
+func (p *PendingPool) Remove(ctx context.Context, _rpc *rpc.Client, pubsub *redis.Client, txHash common.Hash) bool {
 
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
 
-	if _, ok := p.Transactions[txHash]; !ok {
+	tx, ok := p.Transactions[txHash]
+	if !ok {
 		return false
 	}
 
-	// Tx got confirmed, to be used when computing
+	// Tx got confirmed/ dropped, to be used when computing
 	// how long it spent in pending pool
-	p.Transactions[txHash].ConfirmedAt = time.Now().UTC()
-	p.Transactions[txHash].Pool = "confirmed"
+	dropped, _ := tx.IsDropped(ctx, _rpc)
+	if dropped {
+		tx.Pool = "dropped"
+	} else {
+		tx.Pool = "confirmed"
+		tx.ConfirmedAt = time.Now().UTC()
+	}
 
 	// Publishing this confirmed tx
-	p.PublishRemoved(ctx, pubsub, p.Transactions[txHash])
+	p.PublishRemoved(ctx, pubsub, tx)
 
 	delete(p.Transactions, txHash)
 
@@ -333,7 +339,7 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 // RemoveConfirmed - Removes pending tx(s) from pool which have been confirmed
 // & returns how many were removed. If 0 is returned, denotes all tx(s) pending last time
 // are still in pending state
-func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	if len(p.Transactions) == 0 {
 		return 0
@@ -430,8 +436,8 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 	// anymore
 	for _, v := range buffer {
 
-		if !p.Remove(ctx, pubsub, v) {
-			log.Printf("[❗️] Failed to remove confirmed tx from pending pool\n")
+		if !p.Remove(ctx, rpc, pubsub, v) {
+			log.Printf("[❗️] Failed to remove confirmed/ dropped tx from pending pool\n")
 			continue
 		}
 
