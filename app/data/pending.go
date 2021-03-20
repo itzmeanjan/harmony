@@ -22,6 +22,17 @@ type PendingPool struct {
 	Lock         *sync.RWMutex
 }
 
+// Exists - Checks whether tx of given hash exists on pending pool or not
+func (p *PendingPool) Exists(hash common.Hash) bool {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	_, ok := p.Transactions[hash]
+	return ok
+
+}
+
 // Count - How many tx(s) currently present in pending pool
 func (p *PendingPool) Count() uint64 {
 

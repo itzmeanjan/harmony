@@ -26,6 +26,17 @@ type QueuedPool struct {
 	Lock         *sync.RWMutex
 }
 
+// Exists - Checks whether tx of given hash exists on queued pool or not
+func (q *QueuedPool) Exists(hash common.Hash) bool {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	_, ok := q.Transactions[hash]
+	return ok
+
+}
+
 // Count - How many tx(s) currently present in pending pool
 func (q *QueuedPool) Count() uint64 {
 
