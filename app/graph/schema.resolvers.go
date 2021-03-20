@@ -518,6 +518,28 @@ func (r *subscriptionResolver) NewTxToAInMemPool(ctx context.Context, address st
 	return comm, nil
 }
 
+func (r *subscriptionResolver) WatchTx(ctx context.Context, hash string) (<-chan *model.MemPoolTx, error) {
+	if !checkHash(hash) {
+		return nil, errors.New("invalid txHash")
+	}
+
+	_pubsub, err := SubscribeToMemPool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comm := make(chan *model.MemPoolTx, 4)
+	topics := []string{
+		config.GetQueuedTxEntryPublishTopic(),
+		config.GetQueuedTxExitPublishTopic(),
+		config.GetPendingTxEntryPublishTopic(),
+		config.GetPendingTxExitPublishTopic()}
+
+	go ListenToMessages(ctx, _pubsub, topics, comm, LinkedTx, common.HexToHash(hash))
+
+	return comm, nil
+}
+
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
