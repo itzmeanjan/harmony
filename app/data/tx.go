@@ -62,6 +62,7 @@ type MemPoolTx struct {
 	UnstuckAt        time.Time
 	PendingFrom      time.Time
 	ConfirmedAt      time.Time
+	DroppedAt        time.Time
 	Pool             string
 }
 
@@ -318,6 +319,14 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 }
 
+var (
+	STUCK     = 1
+	UNSTUCK   = 2
+	PENDING   = 3
+	CONFIRMED = 4
+	DROPPED   = 5
+)
+
 // TxStatus - When ever multiple go routines need to
 // concurrently fetch status of tx, given hash
 // they will communicate back to caller using this
@@ -328,5 +337,5 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 // channel
 type TxStatus struct {
 	Hash   common.Hash
-	Status bool
+	Status int
 }

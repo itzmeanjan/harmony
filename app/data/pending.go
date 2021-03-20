@@ -285,22 +285,24 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 
 // Remove - Removes already existing tx from pending tx pool
 // denoting it has been mined i.e. confirmed
-func (p *PendingPool) Remove(ctx context.Context, _rpc *rpc.Client, pubsub *redis.Client, txHash common.Hash) bool {
+func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txStat *TxStatus) bool {
 
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
 
-	tx, ok := p.Transactions[txHash]
+	tx, ok := p.Transactions[txStat.Hash]
 	if !ok {
 		return false
 	}
 
 	// Tx got confirmed/ dropped, to be used when computing
 	// how long it spent in pending pool
-	dropped, _ := tx.IsDropped(ctx, _rpc)
-	if dropped {
+	if txStat.Status == DROPPED {
 		tx.Pool = "dropped"
-	} else {
+		tx.DroppedAt = time.Now().UTC()
+	}
+
+	if txStat.Status == CONFIRMED {
 		tx.Pool = "confirmed"
 		tx.ConfirmedAt = time.Now().UTC()
 	}
@@ -308,7 +310,7 @@ func (p *PendingPool) Remove(ctx context.Context, _rpc *rpc.Client, pubsub *redi
 	// Publishing this confirmed tx
 	p.PublishRemoved(ctx, pubsub, tx)
 
-	delete(p.Transactions, txHash)
+	delete(p.Transactions, txStat.Hash)
 
 	return true
 
@@ -345,8 +347,6 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 		return 0
 	}
 
-	buffer := make([]common.Hash, 0, len(p.Transactions))
-
 	// -- Attempt to safely find out which txHashes
 	// are confirmed i.e. included in a recent block
 	//
@@ -370,7 +370,7 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 				// check whether tx is confirmed or not
 				if IsPresentInCurrentPool(txs, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- TxStatus{Hash: tx.Hash, Status: PENDING}
 					return
 
 				}
@@ -382,12 +382,29 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 
 					log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- TxStatus{Hash: tx.Hash, Status: PENDING}
 					return
 
 				}
 
-				commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+				if !yes {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: PENDING}
+					return
+
+				}
+
+				// Tx got confirmed/ dropped, to be used when computing
+				// how long it spent in pending pool
+				dropped, _ := tx.IsDropped(ctx, rpc)
+				if dropped {
+
+					commChan <- TxStatus{Hash: tx.Hash, Status: DROPPED}
+					return
+
+				}
+
+				commChan <- TxStatus{Hash: tx.Hash, Status: CONFIRMED}
 
 			})
 
@@ -395,14 +412,16 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 
 	}
 
+	buffer := make([]*TxStatus, 0, len(p.Transactions))
+
 	var received int
 	mustReceive := len(p.Transactions)
 
 	// Waiting for all go routines to finish
 	for v := range commChan {
 
-		if v.Status {
-			buffer = append(buffer, v.Hash)
+		if v.Status == CONFIRMED || v.Status == DROPPED {
+			buffer = append(buffer, &v)
 		}
 
 		received++
@@ -436,7 +455,7 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	// anymore
 	for _, v := range buffer {
 
-		if !p.Remove(ctx, rpc, pubsub, v) {
+		if !p.Remove(ctx, pubsub, v) {
 			log.Printf("[❗️] Failed to remove confirmed/ dropped tx from pending pool\n")
 			continue
 		}

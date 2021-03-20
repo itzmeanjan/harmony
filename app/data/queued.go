@@ -378,7 +378,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 				// @note Because it's definitely not unstuck
 				if IsPresentInCurrentPool(queued, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- TxStatus{Hash: tx.Hash, Status: STUCK}
 					return
 
 				}
@@ -388,7 +388,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 				// it must be moved out of queued pool
 				if IsPresentInCurrentPool(pending, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: true}
+					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 					return
 
 				}
@@ -400,12 +400,16 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 
 					log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 					return
 
 				}
 
-				commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+				if yes {
+					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+				} else {
+					commChan <- TxStatus{Hash: tx.Hash, Status: STUCK}
+				}
 
 			})
 
@@ -419,7 +423,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 	// Waiting for all go routines to finish
 	for v := range commChan {
 
-		if v.Status {
+		if v.Status == UNSTUCK {
 			buffer = append(buffer, v.Hash)
 		}
 
