@@ -65,6 +65,16 @@ type MemPoolTx struct {
 	Pool             string
 }
 
+// IsDuplicateOf - Checks whether one tx is duplicate of another one or not
+//
+// @note Two tx(s) are considered to be duplicate of each other when
+// both of them having same from address & nonce
+func (m *MemPoolTx) IsDuplicateOf(tx *MemPoolTx) bool {
+
+	return m.Hash != tx.Hash && m.From == tx.From && m.Nonce == tx.Nonce
+
+}
+
 // IsSentFrom - Checks whether this tx was sent from specified address
 // or not
 func (m *MemPoolTx) IsSentFrom(address common.Address) bool {
