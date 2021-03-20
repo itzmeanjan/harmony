@@ -277,6 +277,25 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 		}
 
+	case "dropped":
+
+		gqlTx = &model.MemPoolTx{
+			From:       m.From.Hex(),
+			Gas:        HexToDecimal(m.Gas),
+			Hash:       m.Hash.Hex(),
+			Input:      m.Input.String(),
+			Nonce:      HexToDecimal(m.Nonce),
+			PendingFor: m.DroppedAt.Sub(m.PendingFrom).String(),
+			QueuedFor:  "0 s",
+			Pool:       m.Pool,
+		}
+
+		if !m.QueuedAt.Equal(time.Time{}) && !m.UnstuckAt.Equal(time.Time{}) {
+
+			gqlTx.QueuedFor = m.UnstuckAt.Sub(m.QueuedAt).String()
+
+		}
+
 	}
 
 	if m.To != nil {
