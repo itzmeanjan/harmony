@@ -523,6 +523,11 @@ func (r *subscriptionResolver) WatchTx(ctx context.Context, hash string) (<-chan
 		return nil, errors.New("invalid txHash")
 	}
 
+	tx := memPool.Get(common.HexToHash(hash))
+	if tx == nil {
+		return nil, errors.New("tx not in mempool")
+	}
+
 	_pubsub, err := SubscribeToMemPool(ctx)
 	if err != nil {
 		return nil, err
@@ -535,7 +540,7 @@ func (r *subscriptionResolver) WatchTx(ctx context.Context, hash string) (<-chan
 		config.GetPendingTxEntryPublishTopic(),
 		config.GetPendingTxExitPublishTopic()}
 
-	go ListenToMessages(ctx, _pubsub, topics, comm, LinkedTx, common.HexToHash(hash))
+	go ListenToMessages(ctx, _pubsub, topics, comm, LinkedTx, tx)
 
 	return comm, nil
 }
