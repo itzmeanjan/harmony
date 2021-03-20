@@ -59,7 +59,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for h, tx := range q.Transactions {
+	for _, tx := range q.Transactions {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -68,9 +68,9 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		// and sender address, as of target tx ( for which we had txHash, as input )
 		// or not
 		//
-		//  If yes, we'll include it considerable duplicate tx list, for given
+		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
-		if h != hash && tx.From == targetTx.From && tx.Nonce == targetTx.Nonce {
+		if tx.IsDuplicateOf(targetTx) {
 
 			result = append(result, tx)
 
