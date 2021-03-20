@@ -22,6 +22,22 @@ type PendingPool struct {
 	Lock         *sync.RWMutex
 }
 
+// Get - Given tx hash, attempts to find out tx in pending pool, if any
+//
+// Returns nil, if found nothing
+func (p *PendingPool) Get(hash common.Hash) *MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	if tx, ok := p.Transactions[hash]; ok {
+		return tx
+	}
+
+	return nil
+
+}
+
 // Exists - Checks whether tx of given hash exists on pending pool or not
 func (p *PendingPool) Exists(hash common.Hash) bool {
 

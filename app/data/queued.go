@@ -26,6 +26,22 @@ type QueuedPool struct {
 	Lock         *sync.RWMutex
 }
 
+// Get - Given tx hash, attempts to find out tx in queued pool, if any
+//
+// Returns nil, if found nothing
+func (q *QueuedPool) Get(hash common.Hash) *MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	if tx, ok := q.Transactions[hash]; ok {
+		return tx
+	}
+
+	return nil
+
+}
+
 // Exists - Checks whether tx of given hash exists on queued pool or not
 func (q *QueuedPool) Exists(hash common.Hash) bool {
 
