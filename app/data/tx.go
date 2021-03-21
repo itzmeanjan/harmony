@@ -157,6 +157,11 @@ func (m *MemPoolTx) IsDropped(ctx context.Context, rpc *rpc.Client) (bool, error
 		return true, err
 	}
 
+	// Receipt is not available i.e. tx is dropped ( because nonce is exhausted, we already know )
+	if result == nil {
+		return true, nil
+	}
+
 	// tx receipt exists, meaning, tx got mined
 	return false, nil
 
