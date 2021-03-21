@@ -357,7 +357,7 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	// for concurrently checking status of tx(s)
 	wp := workerpool.New(config.GetConcurrencyFactor())
 
-	commChan := make(chan TxStatus, len(p.Transactions))
+	commChan := make(chan *TxStatus, len(p.Transactions))
 
 	for _, tx := range p.Transactions {
 
@@ -370,7 +370,7 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 				// check whether tx is confirmed or not
 				if IsPresentInCurrentPool(txs, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: PENDING}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
 					return
 
 				}
@@ -382,14 +382,14 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 
 					log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: PENDING}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
 					return
 
 				}
 
 				if !yes {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: PENDING}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
 					return
 
 				}
@@ -399,12 +399,12 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 				dropped, _ := tx.IsDropped(ctx, rpc)
 				if dropped {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: DROPPED}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
 					return
 
 				}
 
-				commChan <- TxStatus{Hash: tx.Hash, Status: CONFIRMED}
+				commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
 
 			})
 
@@ -421,7 +421,7 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	for v := range commChan {
 
 		if v.Status == CONFIRMED || v.Status == DROPPED {
-			buffer = append(buffer, &v)
+			buffer = append(buffer, v)
 		}
 
 		received++
