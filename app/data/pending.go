@@ -455,12 +455,9 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	// anymore
 	for _, v := range buffer {
 
-		if !p.Remove(ctx, pubsub, v) {
-			log.Printf("[❗️] Failed to remove confirmed/ dropped tx from pending pool\n")
-			continue
+		if p.Remove(ctx, pubsub, v) {
+			count++
 		}
-
-		count++
 
 	}
 
