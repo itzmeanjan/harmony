@@ -26,6 +26,33 @@ type QueuedPool struct {
 	Lock         *sync.RWMutex
 }
 
+// Get - Given tx hash, attempts to find out tx in queued pool, if any
+//
+// Returns nil, if found nothing
+func (q *QueuedPool) Get(hash common.Hash) *MemPoolTx {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	if tx, ok := q.Transactions[hash]; ok {
+		return tx
+	}
+
+	return nil
+
+}
+
+// Exists - Checks whether tx of given hash exists on queued pool or not
+func (q *QueuedPool) Exists(hash common.Hash) bool {
+
+	q.Lock.RLock()
+	defer q.Lock.RUnlock()
+
+	_, ok := q.Transactions[hash]
+	return ok
+
+}
+
 // Count - How many tx(s) currently present in pending pool
 func (q *QueuedPool) Count() uint64 {
 
@@ -59,7 +86,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for h, tx := range q.Transactions {
+	for _, tx := range q.Transactions {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -68,9 +95,9 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		// and sender address, as of target tx ( for which we had txHash, as input )
 		// or not
 		//
-		//  If yes, we'll include it considerable duplicate tx list, for given
+		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
-		if h != hash && tx.From == targetTx.From && tx.Nonce == targetTx.Nonce {
+		if tx.IsDuplicateOf(targetTx) {
 
 			result = append(result, tx)
 
@@ -351,7 +378,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 				// @note Because it's definitely not unstuck
 				if IsPresentInCurrentPool(queued, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- TxStatus{Hash: tx.Hash, Status: STUCK}
 					return
 
 				}
@@ -361,7 +388,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 				// it must be moved out of queued pool
 				if IsPresentInCurrentPool(pending, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: true}
+					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 					return
 
 				}
@@ -373,12 +400,16 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 
 					log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 					return
 
 				}
 
-				commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+				if yes {
+					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+				} else {
+					commChan <- TxStatus{Hash: tx.Hash, Status: STUCK}
+				}
 
 			})
 
@@ -392,7 +423,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 	// Waiting for all go routines to finish
 	for v := range commChan {
 
-		if v.Status {
+		if v.Status == UNSTUCK {
 			buffer = append(buffer, v.Hash)
 		}
 

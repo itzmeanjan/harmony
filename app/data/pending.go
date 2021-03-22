@@ -22,6 +22,33 @@ type PendingPool struct {
 	Lock         *sync.RWMutex
 }
 
+// Get - Given tx hash, attempts to find out tx in pending pool, if any
+//
+// Returns nil, if found nothing
+func (p *PendingPool) Get(hash common.Hash) *MemPoolTx {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	if tx, ok := p.Transactions[hash]; ok {
+		return tx
+	}
+
+	return nil
+
+}
+
+// Exists - Checks whether tx of given hash exists on pending pool or not
+func (p *PendingPool) Exists(hash common.Hash) bool {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	_, ok := p.Transactions[hash]
+	return ok
+
+}
+
 // Count - How many tx(s) currently present in pending pool
 func (p *PendingPool) Count() uint64 {
 
@@ -55,7 +82,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for h, tx := range p.Transactions {
+	for _, tx := range p.Transactions {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -64,9 +91,9 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		// and sender address, as of target tx ( for which we had txHash, as input )
 		// or not
 		//
-		//  If yes, we'll include it considerable duplicate tx list, for given
+		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
-		if h != hash && tx.From == targetTx.From && tx.Nonce == targetTx.Nonce {
+		if tx.IsDuplicateOf(targetTx) {
 
 			result = append(result, tx)
 
@@ -258,24 +285,32 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 
 // Remove - Removes already existing tx from pending tx pool
 // denoting it has been mined i.e. confirmed
-func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txHash common.Hash) bool {
+func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txStat *TxStatus) bool {
 
 	p.Lock.Lock()
 	defer p.Lock.Unlock()
 
-	if _, ok := p.Transactions[txHash]; !ok {
+	tx, ok := p.Transactions[txStat.Hash]
+	if !ok {
 		return false
 	}
 
-	// Tx got confirmed, to be used when computing
+	// Tx got confirmed/ dropped, to be used when computing
 	// how long it spent in pending pool
-	p.Transactions[txHash].ConfirmedAt = time.Now().UTC()
-	p.Transactions[txHash].Pool = "confirmed"
+	if txStat.Status == DROPPED {
+		tx.Pool = "dropped"
+		tx.DroppedAt = time.Now().UTC()
+	}
+
+	if txStat.Status == CONFIRMED {
+		tx.Pool = "confirmed"
+		tx.ConfirmedAt = time.Now().UTC()
+	}
 
 	// Publishing this confirmed tx
-	p.PublishRemoved(ctx, pubsub, p.Transactions[txHash])
+	p.PublishRemoved(ctx, pubsub, tx)
 
-	delete(p.Transactions, txHash)
+	delete(p.Transactions, txStat.Hash)
 
 	return true
 
@@ -306,13 +341,11 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 // RemoveConfirmed - Removes pending tx(s) from pool which have been confirmed
 // & returns how many were removed. If 0 is returned, denotes all tx(s) pending last time
 // are still in pending state
-func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	if len(p.Transactions) == 0 {
 		return 0
 	}
-
-	buffer := make([]common.Hash, 0, len(p.Transactions))
 
 	// -- Attempt to safely find out which txHashes
 	// are confirmed i.e. included in a recent block
@@ -324,7 +357,7 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 	// for concurrently checking status of tx(s)
 	wp := workerpool.New(config.GetConcurrencyFactor())
 
-	commChan := make(chan TxStatus, len(p.Transactions))
+	commChan := make(chan *TxStatus, len(p.Transactions))
 
 	for _, tx := range p.Transactions {
 
@@ -337,7 +370,7 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 				// check whether tx is confirmed or not
 				if IsPresentInCurrentPool(txs, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
 					return
 
 				}
@@ -349,12 +382,29 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 
 					log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: false}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
 					return
 
 				}
 
-				commChan <- TxStatus{Hash: tx.Hash, Status: yes}
+				if !yes {
+
+					commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+					return
+
+				}
+
+				// Tx got confirmed/ dropped, to be used when computing
+				// how long it spent in pending pool
+				dropped, _ := tx.IsDropped(ctx, rpc)
+				if dropped {
+
+					commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
+					return
+
+				}
+
+				commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
 
 			})
 
@@ -362,14 +412,16 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 
 	}
 
+	buffer := make([]*TxStatus, 0, len(p.Transactions))
+
 	var received int
 	mustReceive := len(p.Transactions)
 
 	// Waiting for all go routines to finish
 	for v := range commChan {
 
-		if v.Status {
-			buffer = append(buffer, v.Hash)
+		if v.Status == CONFIRMED || v.Status == DROPPED {
+			buffer = append(buffer, v)
 		}
 
 		received++
@@ -403,12 +455,9 @@ func (p *PendingPool) RemoveConfirmed(ctx context.Context, rpc *rpc.Client, pubs
 	// anymore
 	for _, v := range buffer {
 
-		if !p.Remove(ctx, pubsub, v) {
-			log.Printf("[❗️] Failed to remove confirmed tx from pending pool\n")
-			continue
+		if p.Remove(ctx, pubsub, v) {
+			count++
 		}
-
-		count++
 
 	}
 

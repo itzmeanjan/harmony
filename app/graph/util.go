@@ -244,20 +244,16 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 				// Denotes client is not active anymore
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				ctx := context.Background()
-
-				for _, topic := range topics {
-					UnsubscribeFromTopic(ctx, pubsub, topic)
-				}
+				UnsubscribeFromTopic(context.Background(), pubsub, topics...)
 
 				break OUTER
 
-			case <-time.After(time.Millisecond * time.Duration(300)):
+			case <-time.After(time.Millisecond * time.Duration(1)):
 
 				// If client is still active, we'll reach here in
 				// 300 ms & continue to read message published, if any
 
-				msg, err := pubsub.ReceiveTimeout(ctx, time.Microsecond*time.Duration(100))
+				msg, err := pubsub.ReceiveTimeout(ctx, time.Millisecond*time.Duration(9))
 				if err != nil {
 					continue
 				}
@@ -298,11 +294,11 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 
 // UnsubscribeFromTopic - Given topic name to which client is already subscribed to,
 // attempts to unsubscribe from
-func UnsubscribeFromTopic(ctx context.Context, pubsub *redis.PubSub, topic string) {
+func UnsubscribeFromTopic(ctx context.Context, pubsub *redis.PubSub, topic ...string) {
 
-	if err := pubsub.Unsubscribe(ctx, topic); err != nil {
+	if err := pubsub.Unsubscribe(ctx, topic...); err != nil {
 
-		log.Printf("[❗️] Failed to unsubscribe from Redis pubsub : %s\n", err.Error())
+		log.Printf("[❗️] Failed to unsubscribe from Redis pubsub topic(s) : %s\n", err.Error())
 
 	}
 

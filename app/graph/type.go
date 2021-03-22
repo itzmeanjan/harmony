@@ -66,3 +66,32 @@ func CheckToAddress(m *data.MemPoolTx, params ...interface{}) bool {
 	return *m.To == addr
 
 }
+
+// LinkedTx - Given a tx in mempool, which we're tracking, will be matched
+// against before deciding whether just received tx is somehow associated with it or not
+//
+// For checking whether linked or not, we can do
+//
+// - First see if this tx is what we've as txHash [ LINKED ]
+// - If tx is duplicate of it [ LINKED ]
+//
+// Duplicate consideration is done by matching sender address & nonce
+// when both of those fields same for a pair of tx(s), considered to be duplicate
+func LinkedTx(m *data.MemPoolTx, params ...interface{}) bool {
+
+	if len(params) != 1 {
+		return false
+	}
+
+	tx, ok := params[0].(*data.MemPoolTx)
+	if !ok {
+		return false
+	}
+
+	if m.Hash == tx.Hash {
+		return true
+	}
+
+	return m.IsDuplicateOf(tx)
+
+}

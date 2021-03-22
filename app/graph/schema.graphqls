@@ -69,4 +69,6 @@ type Subscription {
   newTxToAInPendingPool(address: String!): MemPoolTx!
   newTxToAInQueuedPool(address: String!): MemPoolTx!
   newTxToAInMemPool(address: String!): MemPoolTx!
+
+  watchTx(hash: String!): MemPoolTx!
 }
