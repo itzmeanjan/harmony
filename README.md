@@ -10,9 +10,11 @@ Reduce Chaos in MemPool 😌
 - [How do I get `harmony` up & running ?](#installation)
 - [How do I interact with `harmony` ?](#usage)
 	- [Checking overall status of mempool](#status-of-memPool)
-	- [Catching Any Tx leaving/ joining Mempool](#catching-any-mempool-changes)
-	- [Catching Tx(s) From `A` in Mempool](#catching-txs-from-a-in-mempool)
-	- [Catching Tx(s) To `A` in Mempool](#catching-txs-to-a-in-mempool)
+	- [Inspecting Mempool](#mempool)
+		- [Catching Any Tx leaving/ joining Mempool](#catching-any-mempool-changes)
+		- [Catching Tx(s) From `A` in Mempool](#catching-txs-from-a-in-mempool)
+		- [Catching Tx(s) To `A` in Mempool](#catching-txs-to-a-in-mempool)
+		- [Watching Tx](#watching-tx)
 	- [Inspecting tx(s) in pending pool](#pending-pool)
 		- [Pending For >= `X`](#pending-for-more-than-X)
 		- [Pending For <= `X`](#pending-for-less-than-X)
@@ -160,6 +162,12 @@ queuedPoolSize | These tx(s) are stuck, will only be eligible for mining when lo
 uptime | This mempool monitoring engine is alive for last `t` time unit
 networkID | The mempool monitoring engine keeps track of mempool of this network
 
+### Mempool
+
+Querying/ watching Mempool changes. 
+
+> Note : Watching mempool is equivalent of watching pending & queued pools together.
+
 ### Catching Any Mempool Changes
 
 Whenever any change in mempool pool happens i.e. tx joins/ leaves pending/ queued pool, subscriber will be notified of those.
@@ -235,6 +243,35 @@ subscription {
   }
 }
 ```
+
+### Watching Tx
+
+You can watch any submitted pending/ queued tx, by using this API. Only requirement is tx must be currently living in mempool.
+
+You can submit a tx on your chain of interest & invoke this API for listening to state changes concerned with this tx. You can pump this tx up, by increasing gas fees, which will result in different tx with same nonce getting submitted. And after sometime, when higher gas price tx gets accepted & lower one gets dropped, you'll get notified for both.
+
+This can be useful, when your users use different walletUI, other than that you provide with, for pumping tx up, with higher gas price, you'll keep watching tx, until one tx with that nonce gets accepted.
+
+Transport : **WebSocket**
+
+URL : **/v1/graphql**
+
+```graphql
+subscription {
+	watchTx(hash: "0x905c056e4e7818d0b857941edc627277cc4c772847fec1708134fb366439110c") {
+    	from
+    	to
+    	nonce
+    	gas
+    	gasPrice
+    	queuedFor
+    	pendingFor
+    	pool
+	}
+}
+```
+
+> Note: As of now, after watching is done, unsubscription is client's responsibility.
 
 ### Pending Pool
 

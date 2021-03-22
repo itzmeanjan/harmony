@@ -38,32 +38,6 @@ func (m *MemPoolTxsDesc) Less(i, j int) bool {
 
 }
 
-// MemPoolTxsAsc - List of mempool tx(s)
-//
-// @note This structure to be used for sorting tx(s)
-// in ascending way, using gas price they're paying
-type MemPoolTxsAsc []*MemPoolTx
-
-// Len - Count of tx(s) present in mempool
-func (m *MemPoolTxsAsc) Len() int {
-	return len(*m)
-}
-
-// Swap - Swap two tx(s), given their index in slice
-func (m *MemPoolTxsAsc) Swap(i, j int) {
-
-	(*m)[i], (*m)[j] = (*m)[j], (*m)[i]
-
-}
-
-// Less - Actual sorting logic i.e. lower gas price
-// tx gets prioritized
-func (m *MemPoolTxsAsc) Less(i, j int) bool {
-
-	return BigHexToBigDecimal((*m)[i].GasPrice).Cmp(BigHexToBigDecimal((*m)[j].GasPrice)) <= 0
-
-}
-
 // MemPoolTx - This is how tx is placed in mempool, after performing
 // RPC call for fetching currently pending/ queued tx(s) in mempool
 // it'll be destructured into this format, for further computation
@@ -88,7 +62,18 @@ type MemPoolTx struct {
 	UnstuckAt        time.Time
 	PendingFrom      time.Time
 	ConfirmedAt      time.Time
+	DroppedAt        time.Time
 	Pool             string
+}
+
+// IsDuplicateOf - Checks whether one tx is duplicate of another one or not
+//
+// @note Two tx(s) are considered to be duplicate of each other when
+// both of them having same from address & nonce
+func (m *MemPoolTx) IsDuplicateOf(tx *MemPoolTx) bool {
+
+	return m.Hash != tx.Hash && m.From == tx.From && m.Nonce == tx.Nonce
+
 }
 
 // IsSentFrom - Checks whether this tx was sent from specified address
@@ -157,6 +142,28 @@ func (m *MemPoolTx) IsQueuedForLTE(x time.Duration) bool {
 	}
 
 	return time.Now().UTC().Sub(m.QueuedAt) <= x
+
+}
+
+// IsDropped - Attempts to check whether this tx was dropped by node or not
+//
+// Dropping can happen due to higher priority tx from same account with same nonce
+// was encountered
+func (m *MemPoolTx) IsDropped(ctx context.Context, rpc *rpc.Client) (bool, error) {
+
+	var result interface{}
+
+	if err := rpc.CallContext(ctx, &result, "eth_getTransactionReceipt", m.Hash.Hex()); err != nil {
+		return true, err
+	}
+
+	// Receipt is not available i.e. tx is dropped ( because nonce is exhausted, we already know )
+	if result == nil {
+		return true, nil
+	}
+
+	// tx receipt exists, meaning, tx got mined
+	return false, nil
 
 }
 
@@ -275,6 +282,25 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 		}
 
+	case "dropped":
+
+		gqlTx = &model.MemPoolTx{
+			From:       m.From.Hex(),
+			Gas:        HexToDecimal(m.Gas),
+			Hash:       m.Hash.Hex(),
+			Input:      m.Input.String(),
+			Nonce:      HexToDecimal(m.Nonce),
+			PendingFor: m.DroppedAt.Sub(m.PendingFrom).String(),
+			QueuedFor:  "0 s",
+			Pool:       m.Pool,
+		}
+
+		if !m.QueuedAt.Equal(time.Time{}) && !m.UnstuckAt.Equal(time.Time{}) {
+
+			gqlTx.QueuedFor = m.UnstuckAt.Sub(m.QueuedAt).String()
+
+		}
+
 	}
 
 	if m.To != nil {
@@ -317,6 +343,14 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 }
 
+var (
+	STUCK     = 1
+	UNSTUCK   = 2
+	PENDING   = 3
+	CONFIRMED = 4
+	DROPPED   = 5
+)
+
 // TxStatus - When ever multiple go routines need to
 // concurrently fetch status of tx, given hash
 // they will communicate back to caller using this
@@ -327,5 +361,5 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 // channel
 type TxStatus struct {
 	Hash   common.Hash
-	Status bool
+	Status int
 }

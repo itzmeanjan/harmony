@@ -72,7 +72,7 @@ func BigIntToBigFloat(num *big.Int) (*big.Float, error) {
 	_res := big.NewFloat(0)
 
 	if _, ok := _res.SetString(num.String()); !ok {
-		return nil, errors.New("Failed to convert big int to big float")
+		return nil, errors.New("failed to convert big int to big float")
 	}
 
 	return _res, nil
