@@ -231,11 +231,7 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 				// Denotes `harmony` is being shutdown
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				ctx := context.Background()
-
-				for _, topic := range topics {
-					UnsubscribeFromTopic(ctx, pubsub, topic)
-				}
+				UnsubscribeFromTopic(context.Background(), pubsub, topics...)
 
 				break OUTER
 
@@ -251,7 +247,7 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 			case <-time.After(time.Millisecond * time.Duration(1)):
 
 				// If client is still active, we'll reach here in
-				// 300 ms & continue to read message published, if any
+				// 10 ms & continue to read message published, if any
 
 				msg, err := pubsub.ReceiveTimeout(ctx, time.Millisecond*time.Duration(9))
 				if err != nil {
