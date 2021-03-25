@@ -96,12 +96,14 @@ func ConnectToBootstraps(ctx context.Context, _host host.Host) (int, int) {
 // SetUpPeerDiscovery - Setting up peer discovery mechanism, by connecting
 // to bootstrap nodes first, then advertises self with rendezvous & attempts to
 // discover peers with same rendezvous, which are to be eventually connected with
-func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
+func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}) {
 
 	_dht, err := dht.New(ctx, _host, dht.Mode(dht.ModeOpt(config.GetPeerDiscoveryMode())))
 	if err != nil {
 
 		log.Printf("[❗️] Failed to create DHT : %s\n", err.Error())
+
+		close(comm)
 		return
 
 	}
@@ -109,6 +111,8 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
 	if err := _dht.Bootstrap(ctx); err != nil {
 
 		log.Printf("[❗️] Failed to keep refreshing DHT : %s\n", err.Error())
+
+		close(comm)
 		return
 
 	}
@@ -124,6 +128,8 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
 	if err != nil {
 
 		log.Printf("[❗️] Failed to start finding peers : %s\n", err.Error())
+
+		close(comm)
 		return
 
 	}
