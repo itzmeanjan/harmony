@@ -54,7 +54,34 @@ func WriteTo(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 			log.Printf("[❗️] Failed to flush stream write buffer : %s\n", err.Error())
 			break
+
 		}
+
+		<-time.After(time.Duration(1) * time.Minute)
+
+	}
+
+}
+
+// HandleStream - Attepts new stream & handles it through out its life time
+func HandleStream(stream network.Stream) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+	go ReadFrom(cancel, rw)
+	go WriteTo(cancel, rw)
+
+	log.Printf("🤩 Got new stream from peer : %s\n", stream.Conn().RemoteMultiaddr())
+
+	// @note This is a blocking call
+	<-ctx.Done()
+	<-time.After(time.Duration(100) * time.Millisecond)
+
+	// Closing stream, may be it's already closed
+	if err := stream.Close(); err != nil {
+
+		log.Printf("[❗️] Failed to close stream : %s\n", err.Error())
 
 	}
 
@@ -64,27 +91,6 @@ func WriteTo(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 // protocol(s)
 func Listen(_host host.Host) {
 
-	_host.SetStreamHandler(protocol.ID(config.GetNetworkingStream()), func(stream network.Stream) {
-
-		ctx, cancel := context.WithCancel(context.Background())
-		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-		go ReadFrom(cancel, rw)
-		go WriteTo(cancel, rw)
-
-		log.Printf("🤩 Got new stream from peer\n")
-
-		// @note This is a blocking call
-		<-ctx.Done()
-		<-time.After(time.Duration(100) * time.Millisecond)
-
-		// Closing stream, may be it's already closed
-		if err := stream.Close(); err != nil {
-
-			log.Printf("[❗️] Failed to close stream : %s\n", err.Error())
-
-		}
-
-	})
+	_host.SetStreamHandler(protocol.ID(config.GetNetworkingStream()), HandleStream)
 
 }
