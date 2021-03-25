@@ -46,7 +46,10 @@ func main() {
 	// Attempting to set up p2p networking stack of `harmony`, so that
 	// this node can be part of larger network
 	if err := networking.Setup(ctx, comm); err != nil {
+
 		log.Printf("[❗️] Failed to bootstrap networking : %s\n", err.Error())
+		os.Exit(1)
+
 	}
 
 	// Attempt to catch interrupt event(s)
