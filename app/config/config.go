@@ -213,3 +213,19 @@ func GetNetworkingRendezvous() string {
 	return "harmony"
 
 }
+
+// GetPeerDiscoveryMode - Kademlia DHT peer discovery mode
+// 1 => Client mode
+// 2 => Server mode ( This peer can act an rendezvous point )
+func GetPeerDiscoveryMode() uint64 {
+
+	if v := GetUint("Networking"); v > 0 && v < 3 {
+		return v
+	}
+
+	// By default it's going to work as client i.e. won't help
+	// others in discoverying peers, when some other node
+	// attempts to use this node as rendezvous point
+	return 1
+
+}
