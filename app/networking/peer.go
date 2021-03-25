@@ -21,7 +21,7 @@ func BootstrapPeers() []multiaddr.Multiaddr {
 	addr, err := multiaddr.NewMultiaddr(config.GetBootstrapPeer())
 	if err != nil {
 
-		log.Printf("[❗️] Failed to parse bootstrap node : %s\n", err.Error())
+		log.Printf("[❗️] Using default bootstrap nodes : %s\n", err.Error())
 		return dht.DefaultBootstrapPeers
 
 	}
@@ -65,6 +65,7 @@ func ConnectToBootstraps(ctx context.Context, _host host.Host) (int, int) {
 
 			}
 
+			log.Printf("➕ Connected to bootstrap node : %s\n", addr)
 			status = true
 
 		}(addr)

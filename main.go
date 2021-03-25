@@ -65,8 +65,7 @@ func main() {
 	// Attempt to catch interrupt event(s)
 	// so that graceful shutdown can be performed
 	interruptChan := make(chan os.Signal, 1)
-
-	signal.Notify(interruptChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL)
+	signal.Notify(interruptChan, syscall.SIGTERM, syscall.SIGINT)
 
 	go func() {
 
