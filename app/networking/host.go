@@ -43,7 +43,6 @@ func CreateHost(ctx context.Context) (host.Host, error) {
 
 	addrs := libp2p.ListenAddrStrings([]string{
 		fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", config.GetNetworkingPort()),
-		fmt.Sprintf("/ip4/127.0.0.1/tcp/%d/ws", config.GetNetworkingPort()),
 	}...)
 
 	security := libp2p.Security(libp2ptls.ID, libp2ptls.New)
