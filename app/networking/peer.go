@@ -62,7 +62,7 @@ func ConnectToBootstraps(ctx context.Context, _host host.Host) (int, int) {
 
 			if err := _host.Connect(ctx, *_peer); err != nil {
 
-				log.Printf("[❗️] Failed to establish connection with bootstrap node(s) : %s\n", err.Error())
+				log.Printf("[❗️] Failed to establish connection with bootstrap node : %s\n", addr)
 				return
 
 			}
