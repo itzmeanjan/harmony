@@ -128,27 +128,43 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
 
 	}
 
-	// Keep listening for new peers found
-	for found := range peerChan {
+	for {
 
-		// this is me 😅
-		if found.ID == _host.ID() {
-			continue
+		select {
+
+		// Keeping track of signal, whether main go routine is asking
+		// this one to stop, because application is going done, so it's better to
+		// attempt graceful shutdown
+		case <-ctx.Done():
+
+			if err := _dht.Close(); err != nil {
+				log.Printf("[❗️] Failed to stop peer discovery mechanism : %s\n", err.Error())
+			}
+
+			return
+
+		case found := <-peerChan:
+
+			// this is me 😅
+			if found.ID == _host.ID() {
+				continue
+			}
+
+			stream, err := _host.NewStream(ctx, found.ID, protocol.ID(config.GetNetworkingStream()))
+			if err != nil {
+
+				log.Printf("[❗️] Failed to connect to discovered peer : %s\n", found)
+				continue
+
+			}
+
+			func(stream network.Stream) {
+				go HandleStream(stream)
+			}(stream)
+
+			log.Printf("✅ Connected to new discovered peer : %s\n", found)
+
 		}
-
-		stream, err := _host.NewStream(ctx, found.ID, protocol.ID(config.GetNetworkingStream()))
-		if err != nil {
-
-			log.Printf("[❗️] Failed to connect to discovered peer : %s\n", found)
-			continue
-
-		}
-
-		func(stream network.Stream) {
-			go HandleStream(stream)
-		}(stream)
-
-		log.Printf("✅ Connected to new discovered peer : %s\n", found)
 
 	}
 
