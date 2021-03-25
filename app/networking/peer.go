@@ -3,8 +3,10 @@ package networking
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/itzmeanjan/harmony/app/config"
+	_discovery "github.com/libp2p/go-libp2p-core/discovery"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -122,7 +124,12 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}
 	log.Printf("✅ Connected to %d/ %d bootstrap nodes\n", connected, total)
 
 	routingDiscovery := discovery.NewRoutingDiscovery(_dht)
-	discovery.Advertise(ctx, routingDiscovery, config.GetNetworkingRendezvous())
+	routingDiscovery.Advertise(
+		ctx,
+		config.GetNetworkingRendezvous(),
+		_discovery.TTL(time.Duration(1)*time.Hour), // Published record of self to stay floating for <= 1 hour
+		_discovery.Limit(100))
+
 	log.Printf("✅ Advertised self with rendezvous\n")
 
 	peerChan, err := routingDiscovery.FindPeers(ctx, config.GetNetworkingRendezvous())
