@@ -3,10 +3,13 @@ package networking
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"log"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
+	"github.com/itzmeanjan/harmony/app/graph"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -34,31 +37,75 @@ func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 }
 
-// WriteTo - Write to stream
+// WriteTo - Write to mempool changes into stream i.e. connection
+// with some remote peer
 func WriteTo(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
+	// @note Deferred functions are executed in LIFO order
 	defer cancel()
 
+	ctx := context.Background()
+	topics := []string{config.GetQueuedTxEntryPublishTopic(),
+		config.GetQueuedTxExitPublishTopic(),
+		config.GetPendingTxEntryPublishTopic(),
+		config.GetPendingTxExitPublishTopic()}
+
+	pubsub, err := graph.SubscribeToMemPool(ctx)
+	if err != nil {
+
+		log.Printf("[❗️] Failed to subscribe to mempool changes : %s\n", err.Error())
+		return
+
+	}
+
+OUTER:
 	for {
 
-		// @note Do something meaningful
-		_, err := rw.Write([]byte("harmony\n"))
+		<-time.After(time.Millisecond * time.Duration(1))
+
+		msg, err := pubsub.ReceiveTimeout(ctx, time.Millisecond*time.Duration(9))
 		if err != nil {
+			continue
+		}
 
-			log.Printf("[❗️] Failed to write to stream : %s\n", err.Error())
-			break
+		switch m := msg.(type) {
+
+		case *redis.Subscription:
+
+			// Pubsub broker informed we've been unsubscribed from
+			// this topic
+			//
+			// It's better to leave this infinite loop
+			if m.Kind == "unsubscribe" {
+				return
+			}
+
+		case *redis.Message:
+
+			_, err := rw.Write([]byte(fmt.Sprintf("%s\n", m.Payload)))
+			if err != nil {
+
+				log.Printf("[❗️] Failed to write to stream : %s\n", err.Error())
+				break OUTER
+
+			}
+
+			if err := rw.Flush(); err != nil {
+
+				log.Printf("[❗️] Failed to flush stream write buffer : %s\n", err.Error())
+				break OUTER
+
+			}
+
+		default:
+			// @note Doing nothing yet
 
 		}
 
-		if err := rw.Flush(); err != nil {
+	}
 
-			log.Printf("[❗️] Failed to flush stream write buffer : %s\n", err.Error())
-			break
-
-		}
-
-		<-time.After(time.Duration(1) * time.Minute)
-
+	if err := pubsub.Unsubscribe(context.Background(), topics...); err != nil {
+		log.Printf("[❗️] Failed to unsubscribe from Redis pubsub topic(s) : %s\n", err.Error())
 	}
 
 }
