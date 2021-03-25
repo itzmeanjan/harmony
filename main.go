@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/itzmeanjan/harmony/app/bootup"
+	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/mempool"
 	"github.com/itzmeanjan/harmony/app/networking"
 	"github.com/itzmeanjan/harmony/app/server"
@@ -43,12 +44,21 @@ func main() {
 	// their state changes
 	comm := make(chan struct{}, 1)
 
-	// Attempting to set up p2p networking stack of `harmony`, so that
-	// this node can be part of larger network
-	if err := networking.Setup(ctx, comm); err != nil {
+	// Checking if user has explicitly asked to be part of
+	// larger `harmony` p2p network
+	if config.GetNetworkingChoice() {
 
-		log.Printf("[❗️] Failed to bootstrap networking : %s\n", err.Error())
-		os.Exit(1)
+		// Attempting to set up p2p networking stack of `harmony`, so that
+		// this node can be part of larger network
+		if err := networking.Setup(ctx, comm); err != nil {
+
+			log.Printf("[❗️] Failed to bootstrap networking : %s\n", err.Error())
+			os.Exit(1)
+
+		}
+	} else {
+
+		log.Printf("[❃] Running in solo mode\n")
 
 	}
 
