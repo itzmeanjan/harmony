@@ -22,7 +22,7 @@ func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 	for {
 
-		// @note Delimiter needs to be defined
+		// @note Need to make use of data received from peer
 		data, err := rw.ReadBytes('\n')
 		if err != nil {
 
@@ -31,7 +31,7 @@ func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 		}
 
-		log.Printf("✅ Received from peer : %s\n", string(data))
+		log.Printf("✅ Received from peer : %d bytes\n", len(data))
 
 	}
 
