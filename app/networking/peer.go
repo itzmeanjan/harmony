@@ -1,12 +1,12 @@
 package networking
 
 import (
-	"bufio"
 	"context"
 	"log"
 
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	discovery "github.com/libp2p/go-libp2p-discovery"
@@ -98,7 +98,7 @@ func ConnectToBootstraps(ctx context.Context, _host host.Host) (int, int) {
 // discover peers with same rendezvous, which are to be eventually connected with
 func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
 
-	_dht, err := dht.New(ctx, _host)
+	_dht, err := dht.New(ctx, _host, dht.Mode(dht.ModeOpt(config.GetPeerDiscoveryMode())))
 	if err != nil {
 
 		log.Printf("[❗️] Failed to create DHT : %s\n", err.Error())
@@ -139,15 +139,16 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host) {
 		stream, err := _host.NewStream(ctx, found.ID, protocol.ID(config.GetNetworkingStream()))
 		if err != nil {
 
-			log.Printf("[❗️] Failed to connect to discovered peer : %s\n", err.Error())
+			log.Printf("[❗️] Failed to connect to discovered peer : %s\n", found)
 			continue
 
 		}
 
-		// @note Handle stream i.e. read from & write to updates
-		bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+		func(stream network.Stream) {
+			go HandleStream(stream)
+		}(stream)
 
-		log.Printf("✅ Connected to new peer\n")
+		log.Printf("✅ Connected to new discovered peer : %s\n", found)
 
 	}
 
