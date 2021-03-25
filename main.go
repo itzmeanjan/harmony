@@ -11,6 +11,7 @@ import (
 
 	"github.com/itzmeanjan/harmony/app/bootup"
 	"github.com/itzmeanjan/harmony/app/mempool"
+	"github.com/itzmeanjan/harmony/app/networking"
 	"github.com/itzmeanjan/harmony/app/server"
 )
 
@@ -38,10 +39,20 @@ func main() {
 
 	}
 
+	// To be passed to worker go routines, for listening to
+	// their state changes
+	comm := make(chan struct{}, 1)
+
+	// Attempting to set up p2p networking stack of `harmony`, so that
+	// this node can be part of larger network
+	if err := networking.Setup(ctx, comm); err != nil {
+		log.Printf("[❗️] Failed to bootstrap networking : %s\n", err.Error())
+	}
+
 	// Attempt to catch interrupt event(s)
 	// so that graceful shutdown can be performed
 	interruptChan := make(chan os.Signal, 1)
-	comm := make(chan struct{}, 1)
+
 	signal.Notify(interruptChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL)
 
 	go func() {
