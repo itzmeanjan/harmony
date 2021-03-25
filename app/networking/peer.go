@@ -135,8 +135,10 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}
 
 	}
 
+OUTER:
 	for {
 
+	INNER:
 		select {
 
 		// Keeping track of signal, whether main go routine is asking
@@ -148,20 +150,24 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}
 				log.Printf("[❗️] Failed to stop peer discovery mechanism : %s\n", err.Error())
 			}
 
-			return
+			break OUTER
 
 		case found := <-peerChan:
 
+			if found.ID.String() == "" {
+				break OUTER
+			}
+
 			// this is me 😅
 			if found.ID == _host.ID() {
-				continue
+				break INNER
 			}
 
 			stream, err := _host.NewStream(ctx, found.ID, protocol.ID(config.GetNetworkingStream()))
 			if err != nil {
 
 				log.Printf("[❗️] Failed to connect to discovered peer : %s\n", found)
-				continue
+				break INNER
 
 			}
 
@@ -174,5 +180,7 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}
 		}
 
 	}
+
+	log.Printf("✅ Stopped looking for peers\n")
 
 }

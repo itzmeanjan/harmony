@@ -4,9 +4,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"fmt"
-	"io"
 	"log"
-	mrand "math/rand"
 	"time"
 
 	"github.com/itzmeanjan/harmony/app/config"
@@ -22,19 +20,7 @@ import (
 // with other `harmony` peers
 func CreateHost(ctx context.Context) (host.Host, error) {
 
-	var source io.Reader
-
-	if seed := config.GetNetworkingSeed(); seed != 0 {
-
-		source = mrand.New(mrand.NewSource(int64(seed)))
-
-	} else {
-
-		source = crand.Reader
-
-	}
-
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, source)
+	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, crand.Reader)
 	if err != nil {
 		return nil, err
 	}

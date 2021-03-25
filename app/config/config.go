@@ -172,19 +172,6 @@ func GetNetworkingPort() uint64 {
 
 }
 
-// GetNetworkingSeed - Optional param can be used during development for
-// getting same peer id
-//
-// @note This is to be used for generating random number, over restarts
-//
-// Consider using something > 0, otherwise cryptographically strong source of
-// randomness to be used
-func GetNetworkingSeed() uint64 {
-
-	return GetUint("NetworkingSeed")
-
-}
-
 // GetNetworkingStream - Libp2p stream name, to be for listening on this
 // & also sending messages when communicating with peer
 func GetNetworkingStream() string {
@@ -193,7 +180,6 @@ func GetNetworkingStream() string {
 		return v
 	}
 
-	log.Printf("[❗️] Failed to get libp2p networking stream name, using `/harmony/v1.0.0`\n")
 	return "/harmony/v1.0.0"
 
 }
@@ -214,7 +200,6 @@ func GetNetworkingRendezvous() string {
 		return v
 	}
 
-	log.Printf("[❗️] Failed to get libp2p networking rendezvous, using `harmony`\n")
 	return "harmony"
 
 }
