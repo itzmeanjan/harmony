@@ -31,6 +31,14 @@ func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 		}
 
+		tx := graph.UnmarshalPubSubMessage(data)
+		if tx == nil {
+
+			log.Printf("[❗️] Failed to deserialise received message from peer\n")
+			continue
+
+		}
+
 		log.Printf("✅ Received from peer : %d bytes\n", len(data))
 
 	}
