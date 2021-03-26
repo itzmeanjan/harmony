@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
@@ -25,6 +26,10 @@ func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 		// @note Need to make use of data received from peer
 		data, err := rw.ReadBytes('\n')
 		if err != nil {
+
+			if err == io.EOF {
+				break
+			}
 
 			log.Printf("[❗️] Failed to read from stream : %s\n", err.Error())
 			break
@@ -131,7 +136,6 @@ func HandleStream(stream network.Stream) {
 
 	// @note This is a blocking call
 	<-ctx.Done()
-	<-time.After(time.Duration(100) * time.Millisecond)
 
 	// Closing stream, may be it's already closed
 	if err := stream.Close(); err != nil {
