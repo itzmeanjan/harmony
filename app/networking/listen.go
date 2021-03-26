@@ -16,8 +16,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
-// ReadFrom - Read from stream
-func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
+// ReadFrom - Read from stream & attempt to deserialize length prefixed
+// tx data received from peer, which will be acted upon
+func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 	defer cancel()
 
@@ -59,7 +60,14 @@ func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 		}
 
-		log.Printf("✅ Received from peer : %d bytes\n", len(chunk))
+		if memPool.HandleTxFromPeer(ctx, redisClient, tx) {
+
+			log.Printf("✅ Received new tx from peer : %d bytes\n", len(chunk))
+			continue
+
+		}
+
+		log.Printf("👍 Received already seen tx from peer : %d bytes\n", len(chunk))
 
 	}
 
@@ -156,7 +164,7 @@ func HandleStream(stream network.Stream) {
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	remote := stream.Conn().RemoteMultiaddr()
 
-	go ReadFrom(cancel, rw)
+	go ReadFrom(ctx, cancel, rw)
 	go WriteTo(cancel, rw)
 
 	log.Printf("🤩 Got new stream from peer : %s\n", remote)
