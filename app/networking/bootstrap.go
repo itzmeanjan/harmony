@@ -41,6 +41,10 @@ func InitRedisClient(client *redis.Client) error {
 // Setup - Bootstraps `harmony`'s p2p networking stack
 func Setup(ctx context.Context, comm chan struct{}) error {
 
+	if !(memPool != nil && redisClient != nil) {
+		return errors.New("mempool/ redisClient instance not initialised")
+	}
+
 	// Attempt to create a new `harmony` node
 	// with p2p networking capabilities
 	host, err := CreateHost(ctx)
