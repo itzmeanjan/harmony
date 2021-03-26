@@ -14,11 +14,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/multiformats/go-multiaddr"
 )
 
 // ReadFrom - Read from stream & attempt to deserialize length prefixed
 // tx data received from peer, which will be acted upon
-func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter) {
+func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, remote multiaddr.Multiaddr) {
 
 	defer cancel()
 
@@ -32,7 +33,7 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 				break
 			}
 
-			log.Printf("[❗️] Failed to read size of next chunk : %s\n", err.Error())
+			log.Printf("[❗️] Failed to read size of next chunk : %s | %s\n", err.Error(), remote)
 			break
 
 		}
@@ -47,7 +48,7 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 				break
 			}
 
-			log.Printf("[❗️] Failed to read chunk from peer : %s\n", err.Error())
+			log.Printf("[❗️] Failed to read chunk from peer : %s | %s\n", err.Error(), remote)
 			break
 
 		}
@@ -55,19 +56,19 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 		tx := graph.UnmarshalPubSubMessage(chunk)
 		if tx == nil {
 
-			log.Printf("[❗️] Failed to deserialise message from peer\n")
+			log.Printf("[❗️] Failed to deserialise message from peer | %s\n", remote)
 			continue
 
 		}
 
 		if memPool.HandleTxFromPeer(ctx, redisClient, tx) {
 
-			log.Printf("✅ Received new tx from peer : %d bytes\n", len(chunk))
+			log.Printf("✅ New tx from peer : %d bytes | %s\n", len(chunk), remote)
 			continue
 
 		}
 
-		log.Printf("👍 Received already seen tx from peer : %d bytes\n", len(chunk))
+		log.Printf("👍 Seen tx from peer : %d bytes | %s\n", len(chunk), remote)
 
 	}
 
@@ -75,12 +76,11 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 
 // WriteTo - Write to mempool changes into stream i.e. connection
 // with some remote peer
-func WriteTo(cancel context.CancelFunc, rw *bufio.ReadWriter) {
+func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, remote multiaddr.Multiaddr) {
 
 	// @note Deferred functions are executed in LIFO order
 	defer cancel()
 
-	ctx := context.Background()
 	topics := []string{config.GetQueuedTxEntryPublishTopic(),
 		config.GetQueuedTxExitPublishTopic(),
 		config.GetPendingTxEntryPublishTopic(),
@@ -125,21 +125,21 @@ OUTER:
 
 			if n != len(m.Payload) {
 
-				log.Printf("[❗️] Failed to prepare chunk for peer\n")
+				log.Printf("[❗️] Failed to prepare chunk for peer | %s\n", remote)
 				break
 
 			}
 
 			if _, err := rw.Write(chunk); err != nil {
 
-				log.Printf("[❗️] Failed to write chunk on stream : %s\n", err.Error())
+				log.Printf("[❗️] Failed to write chunk on stream : %s | %s\n", err.Error(), remote)
 				break OUTER
 
 			}
 
 			if err := rw.Flush(); err != nil {
 
-				log.Printf("[❗️] Failed to flush stream buffer : %s\n", err.Error())
+				log.Printf("[❗️] Failed to flush stream buffer : %s | %s\n", err.Error(), remote)
 				break OUTER
 
 			}
@@ -164,8 +164,8 @@ func HandleStream(stream network.Stream) {
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	remote := stream.Conn().RemoteMultiaddr()
 
-	go ReadFrom(ctx, cancel, rw)
-	go WriteTo(cancel, rw)
+	go ReadFrom(ctx, cancel, rw, remote)
+	go WriteTo(ctx, cancel, rw, remote)
 
 	log.Printf("🤩 Got new stream from peer : %s\n", remote)
 
