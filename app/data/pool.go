@@ -182,3 +182,33 @@ func (m *MemPool) Stat(start time.Time) {
 	log.Printf("❇️ Pending Tx(s) : %d | Queued Tx(s) : %d, in %s\n", m.PendingPoolLength(), m.QueuedPoolLength(), time.Now().UTC().Sub(start))
 
 }
+
+// HandleTxFromPeer - When new chunk of deserialised in-flight tx ( i.e. entering/ leaving mempool )
+// is received from any `harmony` peer, it will be checked against latest state
+// of local mempool view, to decide whether this tx can be acted upon
+// somehow or not
+func (m *MemPool) HandleTxFromPeer(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
+
+	if m.Exists(tx.Hash) {
+		return false
+	}
+
+	var status bool
+
+	switch tx.Pool {
+
+	case "dropped", "confirmed":
+		// @note Clients can be notified, if not yet
+	case "queued":
+
+		status = m.Queued.Add(ctx, pubsub, tx)
+
+	case "pending":
+
+		status = m.Pending.Add(ctx, pubsub, tx)
+
+	}
+
+	return status
+
+}
