@@ -3,7 +3,7 @@ package networking
 import (
 	"bufio"
 	"context"
-	"fmt"
+	"encoding/binary"
 	"io"
 	"log"
 	"time"
@@ -23,28 +23,43 @@ func ReadFrom(cancel context.CancelFunc, rw *bufio.ReadWriter) {
 
 	for {
 
-		// @note Need to make use of data received from peer
-		data, err := rw.ReadBytes('\n')
-		if err != nil {
+		buf := make([]byte, 4)
+
+		if _, err := io.ReadFull(rw.Reader, buf); err != nil {
 
 			if err == io.EOF {
 				break
 			}
 
-			log.Printf("[❗️] Failed to read from stream : %s\n", err.Error())
+			log.Printf("[❗️] Failed to read size of next chunk : %s\n", err.Error())
 			break
 
 		}
 
-		tx := graph.UnmarshalPubSubMessage(data)
+		size := binary.LittleEndian.Uint32(buf)
+
+		chunk := make([]byte, size)
+
+		if _, err := io.ReadFull(rw.Reader, chunk); err != nil {
+
+			if err == io.EOF {
+				break
+			}
+
+			log.Printf("[❗️] Failed to read chunk from peer : %s\n", err.Error())
+			break
+
+		}
+
+		tx := graph.UnmarshalPubSubMessage(chunk)
 		if tx == nil {
 
-			log.Printf("[❗️] Failed to deserialise received message from peer\n")
+			log.Printf("[❗️] Failed to deserialise message from peer\n")
 			continue
 
 		}
 
-		log.Printf("✅ Received from peer : %d bytes\n", len(data))
+		log.Printf("✅ Received from peer : %d bytes\n", len(chunk))
 
 	}
 
@@ -95,17 +110,28 @@ OUTER:
 
 		case *redis.Message:
 
-			_, err := rw.Write([]byte(fmt.Sprintf("%s\n", m.Payload)))
-			if err != nil {
+			chunk := make([]byte, 4+len(m.Payload))
 
-				log.Printf("[❗️] Failed to write to stream : %s\n", err.Error())
+			binary.LittleEndian.PutUint32(chunk[:4], uint32(len(m.Payload)))
+			n := copy(chunk[4:], []byte(m.Payload))
+
+			if n != len(m.Payload) {
+
+				log.Printf("[❗️] Failed to prepare chunk for peer\n")
+				break
+
+			}
+
+			if _, err := rw.Write(chunk); err != nil {
+
+				log.Printf("[❗️] Failed to write chunk on stream : %s\n", err.Error())
 				break OUTER
 
 			}
 
 			if err := rw.Flush(); err != nil {
 
-				log.Printf("[❗️] Failed to flush stream write buffer : %s\n", err.Error())
+				log.Printf("[❗️] Failed to flush stream buffer : %s\n", err.Error())
 				break OUTER
 
 			}
@@ -128,11 +154,12 @@ func HandleStream(stream network.Stream) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+	remote := stream.Conn().RemoteMultiaddr()
 
 	go ReadFrom(cancel, rw)
 	go WriteTo(cancel, rw)
 
-	log.Printf("🤩 Got new stream from peer : %s\n", stream.Conn().RemoteMultiaddr())
+	log.Printf("🤩 Got new stream from peer : %s\n", remote)
 
 	// @note This is a blocking call
 	<-ctx.Done()
@@ -143,6 +170,8 @@ func HandleStream(stream network.Stream) {
 		log.Printf("[❗️] Failed to close stream : %s\n", err.Error())
 
 	}
+
+	log.Printf("🙂 Dropped peer connection : %s\n", remote)
 
 }
 
