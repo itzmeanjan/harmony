@@ -10,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	discovery "github.com/libp2p/go-libp2p-discovery"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -138,6 +139,11 @@ func LookForPeers(ctx context.Context, _host host.Host, _dht *dht.IpfsDHT, routi
 				if found.ID == _host.ID() {
 					break INNER
 				}
+
+				// Adding peer info in local peer store, so that we can attempt to connect to
+				// this peer in near future, if connection is found to be lost due to some
+				// unforeseeable reasons
+				_host.Peerstore().AddAddrs(found.ID, found.Addrs, peerstore.PermanentAddrTTL)
 
 				stream, err := _host.NewStream(ctx, found.ID, protocol.ID(config.GetNetworkingStream()))
 				if err != nil {
