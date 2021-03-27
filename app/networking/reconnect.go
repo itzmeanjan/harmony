@@ -40,6 +40,21 @@ func (r *ReconnectionManager) Start(ctx context.Context) {
 
 		case <-ctx.Done():
 			return
+		case _peerId := <-r.NewPeerChan:
+			// Listening for peers, with whom we lost
+			// connection ( stream got closed, actually )
+			// & we'll attempt to reestablish that 👇
+
+			_, ok := r.Peers[_peerId]
+			if !ok {
+
+				r.Peers[_peerId] = &AttemptDetails{
+					StartedAt: time.Now().UTC(),
+					Delay:     time.Duration(5) * time.Second,
+				}
+
+			}
+
 		case <-time.After(time.Duration(100) * time.Millisecond):
 
 		}
