@@ -13,14 +13,13 @@ import (
 	"github.com/itzmeanjan/harmony/app/graph"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 )
 
 // ReadFrom - Read from stream & attempt to deserialize length prefixed
 // tx data received from peer, which will be acted upon
-func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, peerId peer.ID, remote multiaddr.Multiaddr) {
+func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, peerId string, remote multiaddr.Multiaddr) {
 
 	defer cancel()
 
@@ -82,7 +81,7 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 
 // WriteTo - Write to mempool changes into stream i.e. connection
 // with some remote peer
-func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, peerId peer.ID, remote multiaddr.Multiaddr) {
+func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, peerId string, remote multiaddr.Multiaddr) {
 
 	// @note Deferred functions are executed in LIFO order
 	defer cancel()
@@ -209,8 +208,8 @@ func HandleStream(stream network.Stream) {
 	ctx, cancel := context.WithCancel(context.Background())
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
-	go ReadFrom(ctx, cancel, rw, peerId, remote)
-	go WriteTo(ctx, cancel, rw, peerId, remote)
+	go ReadFrom(ctx, cancel, rw, peerId.String(), remote)
+	go WriteTo(ctx, cancel, rw, peerId.String(), remote)
 
 	log.Printf("🤩 Got new stream from peer : %s\n", remote)
 

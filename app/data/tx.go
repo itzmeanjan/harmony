@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/itzmeanjan/harmony/app/graph/model"
-	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -65,7 +64,7 @@ type MemPoolTx struct {
 	ConfirmedAt      time.Time
 	DroppedAt        time.Time
 	Pool             string
-	ReceivedFrom     peer.ID
+	ReceivedFrom     string
 }
 
 // IsDuplicateOf - Checks whether one tx is duplicate of another one or not
