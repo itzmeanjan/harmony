@@ -20,6 +20,33 @@ type AttemptDetails struct {
 	Delay           time.Duration
 }
 
+// EverAttempted - Because we consider `times` == 0, to be
+// never attempted
+func (a *AttemptDetails) EverAttempted() bool {
+	return a.Times > 0
+}
+
+// ShallWeAttempt - If never attempted, surely we can attempt
+//
+// If we've exhausted all attempts, we'll not reattempt, they're to
+// be dropped
+//
+// If time we were supposed to be waiting after last attempted timestamp
+// has passed by, we can attempt
+func (a *AttemptDetails) ShallWeAttempt(maxAttempt uint64) bool {
+
+	if !a.EverAttempted() {
+		return true
+	}
+
+	if a.Times > maxAttempt {
+		return false
+	}
+
+	return a.LastAttemptedAt.Add(a.Delay).Before(time.Now().UTC())
+
+}
+
 // ReconnectionManager - When stream to peer gets reset, it can be attempted
 // to be reestablished, by sending request to this worker
 //
