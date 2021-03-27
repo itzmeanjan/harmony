@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"log"
+	"math"
 	"time"
 
 	"github.com/itzmeanjan/harmony/app/config"
@@ -17,7 +18,6 @@ import (
 //
 // These are to be refreshed after each failed attempt
 type AttemptDetails struct {
-	StartedAt       time.Time
 	LastAttemptedAt time.Time
 	Times           uint64
 	Delay           time.Duration
@@ -57,6 +57,30 @@ func (a *AttemptDetails) ShallWeAttempt(maxAttempt uint64) bool {
 
 }
 
+// FailedAttempt - Attempt to connect to some peer just failed, we're
+// updating details, so that when to attempt next can be determined easily
+func (a *AttemptDetails) FailedAttempt() {
+
+	a.LastAttemptedAt = time.Now().UTC()
+	a.Times++
+
+	if a.Times > 1 {
+
+		dur := a.Delay.Seconds()
+
+		// Time span, to wait for ( from now ), before
+		// next time it can be attempted, being
+		// calculated in using fibonacci sequence
+		//
+		// This waiting time can be at max 3599s
+		next := uint64(math.Round(dur*(1+math.Sqrt(5))/2.0)) % 3600
+
+		a.Delay = time.Duration(next) * time.Second
+
+	}
+
+}
+
 // ReconnectionManager - When stream to peer gets reset, it can be attempted
 // to be reestablished, by sending request to this worker
 //
@@ -86,8 +110,7 @@ func (r *ReconnectionManager) Start(ctx context.Context) {
 			if !ok {
 
 				r.Peers[_peerId] = &AttemptDetails{
-					StartedAt: time.Now().UTC(),
-					Delay:     time.Duration(5) * time.Second,
+					Delay: time.Duration(5) * time.Second,
 				}
 
 			}
@@ -107,6 +130,11 @@ func (r *ReconnectionManager) Start(ctx context.Context) {
 				if err != nil {
 
 					log.Printf("[❗️] Peer reconnection attempt failed : %s\n", k)
+
+					// Marking this connection attempt failed, which will
+					// help it in preparing when to attempt next
+					v.FailedAttempt()
+					continue
 
 				}
 
