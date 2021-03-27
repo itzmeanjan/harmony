@@ -175,6 +175,9 @@ func HandleStream(stream network.Stream) {
 			log.Printf("[❗️] Failed to close stream : %s\n", err.Error())
 		}
 
+		// Marking that we're not connected to this peer
+		// We can attempt to connect to it, in future iteration
+		connectionManager.Dropped(peerId)
 		return
 
 	}

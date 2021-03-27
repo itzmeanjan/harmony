@@ -53,16 +53,22 @@ func (c *ConnectionManager) Start(ctx context.Context) {
 		select {
 
 		case <-ctx.Done():
+			// Just stop doing what you're doing
 			return
+
 		case peer := <-c.NewPeerChan:
 
+			c.Lock.Lock()
 			c.Peers[peer] = true
+			c.Lock.Unlock()
 
 		case peer := <-c.DroppedPeerChan:
 
+			c.Lock.Lock()
 			c.Peers[peer] = false
+			c.Lock.Unlock()
 
-		case <-time.After(time.Duration(100) * time.Millisecond):
+		case <-time.After(time.Duration(1) * time.Millisecond):
 
 			peers := make([]peer.ID, 0, len(c.Peers))
 
@@ -89,7 +95,7 @@ func NewConnectionManager() *ConnectionManager {
 	return &ConnectionManager{
 		Lock:            sync.RWMutex{},
 		Peers:           make(map[peer.ID]bool),
-		NewPeerChan:     make(chan peer.ID, 10),
-		DroppedPeerChan: make(chan peer.ID, 10),
+		NewPeerChan:     make(chan peer.ID, 100),
+		DroppedPeerChan: make(chan peer.ID, 100),
 	}
 }
