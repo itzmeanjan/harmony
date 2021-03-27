@@ -13,13 +13,14 @@ import (
 	"github.com/itzmeanjan/harmony/app/graph"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 )
 
 // ReadFrom - Read from stream & attempt to deserialize length prefixed
 // tx data received from peer, which will be acted upon
-func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, remote multiaddr.Multiaddr) {
+func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, peerId peer.ID, remote multiaddr.Multiaddr) {
 
 	defer cancel()
 
@@ -61,6 +62,11 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 
 		}
 
+		// Keeping entry of from which peer we received this tx
+		// so that we don't end up sending them again same tx
+		// when it'll be published on Pub/Sub topic
+		tx.ReceivedFrom = peerId
+
 		if memPool.HandleTxFromPeer(ctx, redisClient, tx) {
 
 			log.Printf("✅ New tx from peer : %d bytes | %s\n", len(chunk), remote)
@@ -76,7 +82,7 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 
 // WriteTo - Write to mempool changes into stream i.e. connection
 // with some remote peer
-func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, remote multiaddr.Multiaddr) {
+func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWriter, peerId peer.ID, remote multiaddr.Multiaddr) {
 
 	// @note Deferred functions are executed in LIFO order
 	defer cancel()
@@ -118,6 +124,19 @@ func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrite
 				}
 
 			case *redis.Message:
+
+				msg := graph.UnmarshalPubSubMessage([]byte(m.Payload))
+				// Failed to deserialise message, we don't need
+				// to send it to remote
+				if msg == nil {
+					break
+				}
+
+				// We found this tx from this peer, so we're
+				// not sending it back
+				if msg.ReceivedFrom == peerId {
+					break
+				}
 
 				chunk := make([]byte, 4+len(m.Payload))
 
@@ -190,8 +209,8 @@ func HandleStream(stream network.Stream) {
 	ctx, cancel := context.WithCancel(context.Background())
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
-	go ReadFrom(ctx, cancel, rw, remote)
-	go WriteTo(ctx, cancel, rw, remote)
+	go ReadFrom(ctx, cancel, rw, peerId, remote)
+	go WriteTo(ctx, cancel, rw, peerId, remote)
 
 	log.Printf("🤩 Got new stream from peer : %s\n", remote)
 
