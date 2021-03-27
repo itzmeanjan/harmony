@@ -2,11 +2,14 @@ package networking
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
 // AttemptDetails - Keeps track of how many times we attempted to
@@ -90,6 +93,37 @@ func (r *ReconnectionManager) Start(ctx context.Context) {
 			}
 
 		case <-time.After(time.Duration(100) * time.Millisecond):
+			// Every 100ms, attempting to connect to peers
+
+			success := make([]peer.ID, 0, len(r.Peers))
+
+			for k, v := range r.Peers {
+
+				if !v.ShallWeAttempt(r.MaxAttemptCount) {
+					continue
+				}
+
+				stream, err := r.Host.NewStream(ctx, k, protocol.ID(config.GetNetworkingStream()))
+				if err != nil {
+
+					log.Printf("[❗️] Peer reconnection attempt failed : %s\n", k)
+
+				}
+
+				func(stream network.Stream) {
+					go HandleStream(stream)
+				}(stream)
+
+				success = append(success, k)
+				log.Printf("✅ Reconnected to dropped peer : %s\n", k)
+
+			}
+
+			// Dropping entries of those peers, with whom
+			// we've successfully established connection
+			for _, v := range success {
+				delete(r.Peers, v)
+			}
 
 		case <-time.After(time.Duration(1000) * time.Millisecond):
 			// Every 1 seconds, we'll attempt to check if any peer
