@@ -140,6 +140,14 @@ func LookForPeers(ctx context.Context, _host host.Host, _dht *dht.IpfsDHT, routi
 					break INNER
 				}
 
+				// We're already connected with this peer
+				if connectionManager.IsConnected(found.ID) {
+
+					log.Printf("[🙂] Discovered connected peer : %s\n", found)
+					break INNER
+
+				}
+
 				// Adding peer info in local peer store, so that we can attempt to connect to
 				// this peer in near future, if connection is found to be lost due to some
 				// unforeseeable reasons
@@ -157,6 +165,7 @@ func LookForPeers(ctx context.Context, _host host.Host, _dht *dht.IpfsDHT, routi
 					go HandleStream(stream)
 				}(stream)
 
+				connectionManager.Added(found.ID)
 				log.Printf("✅ Connected to new discovered peer : %s\n", found)
 
 			}

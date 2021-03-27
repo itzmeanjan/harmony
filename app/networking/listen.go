@@ -182,10 +182,10 @@ func HandleStream(stream network.Stream) {
 
 	}
 
-	// Letting reconnection manager know that connection
-	// got closed/ stream reset, which will attempt to
-	// reconnect
-	reconnectionManager.Add(peerId)
+	// Connection manager also knows this peer can be attempted to be
+	// reconnected, if founded via discovery service
+	connectionManager.Dropped(peerId)
+
 	log.Printf("🙂 Dropped peer connection : %s\n", remote)
 
 }

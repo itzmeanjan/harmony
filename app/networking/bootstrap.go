@@ -10,7 +10,6 @@ import (
 
 var memPool *data.MemPool
 var redisClient *redis.Client
-var reconnectionManager *ReconnectionManager
 var connectionManager *ConnectionManager
 
 // InitMemPool - Initializing mempool handle, in this module
@@ -61,12 +60,9 @@ func Setup(ctx context.Context, comm chan struct{}) error {
 
 	go SetUpPeerDiscovery(ctx, host, comm)
 
-	reconnectionManager = NewReconnectionManager(host)
-	connectionManager = NewConnectionManager()
-
-	// Starting these two worker as a seperate go routine,
+	// Starting this worker as a seperate go routine,
 	// so that they can manage their own life cycle independently
-	go reconnectionManager.Start(ctx)
+	connectionManager = NewConnectionManager()
 	go connectionManager.Start(ctx)
 
 	return nil
