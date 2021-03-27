@@ -171,6 +171,9 @@ func LookForPeers(ctx context.Context, _host host.Host, _dht *dht.IpfsDHT, routi
 // discover peers with same rendezvous, which are to be eventually connected with
 func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}) {
 
+	connected, total := ConnectToBootstraps(ctx, _host)
+	log.Printf("✅ Connected to %d/ %d bootstrap nodes\n", connected, total)
+
 	_dht, err := dht.New(ctx, _host, dht.Mode(dht.ModeOpt(config.GetPeerDiscoveryMode())))
 	if err != nil {
 
@@ -190,9 +193,6 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}
 
 	}
 
-	connected, total := ConnectToBootstraps(ctx, _host)
-	log.Printf("✅ Connected to %d/ %d bootstrap nodes\n", connected, total)
-
 	routingDiscovery := discovery.NewRoutingDiscovery(_dht)
 	routingDiscovery.Advertise(
 		ctx,
@@ -202,16 +202,16 @@ func SetUpPeerDiscovery(ctx context.Context, _host host.Host, comm chan struct{}
 
 	log.Printf("✅ Advertised self with rendezvous\n")
 
-	workerComm := make(chan struct{}, 1)
-
 	for {
 
 		log.Printf("✅ Started looking for peers\n")
+
+		workerComm := make(chan struct{}, 1)
 		go LookForPeers(ctx, _host, _dht, routingDiscovery, workerComm)
 		<-workerComm
 
 		log.Printf("✅ Stopped looking for peers\n")
-		<-time.After(time.Minute * time.Duration(5))
+		<-time.After(time.Minute * time.Duration(2))
 
 	}
 
