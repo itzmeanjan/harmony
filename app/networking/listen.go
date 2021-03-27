@@ -162,10 +162,30 @@ func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrite
 // HandleStream - Attepts new stream & handles it through out its life time
 func HandleStream(stream network.Stream) {
 
-	ctx, cancel := context.WithCancel(context.Background())
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	remote := stream.Conn().RemoteMultiaddr()
 	peerId := stream.Conn().RemotePeer()
+
+	// We're already connected with this peer, we're closing this stream
+	if connectionManager.IsConnected(peerId) {
+
+		log.Printf("[🙃] Duplicate connection to peer : %s, dropping\n", remote)
+
+		// Closing stream, may be it's already closed
+		if err := stream.Close(); err != nil {
+			log.Printf("[❗️] Failed to close stream : %s\n", err.Error())
+		}
+
+		return
+
+	}
+
+	// Marking we're already connect to this peer, so
+	// when next time we start discovering peers, we don't
+	// connect to them again
+	connectionManager.Added(peerId)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
 	go ReadFrom(ctx, cancel, rw, remote)
 	go WriteTo(ctx, cancel, rw, remote)

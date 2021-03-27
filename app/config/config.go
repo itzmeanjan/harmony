@@ -230,15 +230,3 @@ func GetNetworkingChoice() bool {
 	return GetBool("NetworkingEnabled")
 
 }
-
-// GetMaxReconnectionAttemptCount - How many times, at most, stream creation to be
-// attempted with a peer of interest, which was closed in recent past
-func GetMaxReconnectionAttemptCount() uint64 {
-
-	if count := GetUint("MaxReconnectionAttemptCount"); count == 0 {
-		return count
-	}
-
-	return 3
-
-}

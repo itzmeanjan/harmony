@@ -143,7 +143,7 @@ func LookForPeers(ctx context.Context, _host host.Host, _dht *dht.IpfsDHT, routi
 				// We're already connected with this peer
 				if connectionManager.IsConnected(found.ID) {
 
-					log.Printf("[🙂] Discovered connected peer : %s\n", found)
+					log.Printf("[🙂] Discovered already connected peer : %s\n", found)
 					break INNER
 
 				}
