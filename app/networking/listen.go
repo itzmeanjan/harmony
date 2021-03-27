@@ -165,6 +165,7 @@ func HandleStream(stream network.Stream) {
 	ctx, cancel := context.WithCancel(context.Background())
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	remote := stream.Conn().RemoteMultiaddr()
+	peerId := stream.Conn().RemotePeer()
 
 	go ReadFrom(ctx, cancel, rw, remote)
 	go WriteTo(ctx, cancel, rw, remote)
@@ -181,6 +182,10 @@ func HandleStream(stream network.Stream) {
 
 	}
 
+	// Letting reconnection manager know that connection
+	// got closed/ stream reset, which will attempt to
+	// reconnect
+	reconnectionManager.Add(peerId)
 	log.Printf("🙂 Dropped peer connection : %s\n", remote)
 
 }

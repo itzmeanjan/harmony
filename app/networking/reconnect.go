@@ -92,7 +92,15 @@ type ReconnectionManager struct {
 	NewPeerChan     chan peer.ID
 }
 
-// Start - ...
+// Add - Supposed to be invoked when stream reset
+// with some peer
+func (r *ReconnectionManager) Add(peerId peer.ID) {
+	r.NewPeerChan <- peerId
+}
+
+// Start - To be run as a seperate go routine, which will attempt
+// receive new peer reconnection requests & try those until all attempts
+// are exhausted
 func (r *ReconnectionManager) Start(ctx context.Context) {
 
 	for {

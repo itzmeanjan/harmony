@@ -10,6 +10,7 @@ import (
 
 var memPool *data.MemPool
 var redisClient *redis.Client
+var reconnectionManager *ReconnectionManager
 
 // InitMemPool - Initializing mempool handle, in this module
 // so that it can be used updating local mempool state, when new
@@ -38,6 +39,20 @@ func InitRedisClient(client *redis.Client) error {
 
 }
 
+// InitReconnectionManager - Initialising it so that it's available
+// in global scope with in this package & it can be used by multiple
+// workers, when they encounter problem i.e. stream gets reset
+func InitReconnectionManager(reconnMgr *ReconnectionManager) error {
+
+	if reconnMgr != nil {
+		reconnectionManager = reconnMgr
+		return nil
+	}
+
+	return errors.New("bad reconnection manager received in p2p networking handler")
+
+}
+
 // Setup - Bootstraps `harmony`'s p2p networking stack
 func Setup(ctx context.Context, comm chan struct{}) error {
 
@@ -58,6 +73,14 @@ func Setup(ctx context.Context, comm chan struct{}) error {
 	Listen(host)
 
 	go SetUpPeerDiscovery(ctx, host, comm)
+
+	reconnMgr := NewReconnectionManager(host)
+	if err := InitReconnectionManager(reconnMgr); err != nil {
+		return err
+	}
+
+	// Starting this worker as a seperate go routine
+	go reconnMgr.Start(ctx)
 
 	return nil
 
