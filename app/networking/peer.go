@@ -165,7 +165,6 @@ func LookForPeers(ctx context.Context, _host host.Host, _dht *dht.IpfsDHT, routi
 					go HandleStream(stream)
 				}(stream)
 
-				connectionManager.Added(found.ID)
 				log.Printf("✅ Connected to new discovered peer : %s\n", found)
 
 			case <-time.After(time.Duration(1) * time.Millisecond):
