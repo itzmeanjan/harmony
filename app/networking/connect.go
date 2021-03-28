@@ -2,35 +2,26 @@ package networking
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+// IsConnected - Queries can be sent to connection manager
+// by worker go routines over channel & response to be sent
+// back to them over `response` channel
+type IsConnected struct {
+	Peer     peer.ID
+	Response chan bool
+}
+
 // ConnectionManager - All connected peers to be kept track of, so that we don't attempt
 // to reconnect to same peer again
 type ConnectionManager struct {
-	Lock            sync.RWMutex
 	Peers           map[peer.ID]bool
 	NewPeerChan     chan peer.ID
 	DroppedPeerChan chan peer.ID
-}
-
-// IsConnected - Before attempting to (re-)establish connection
-// with peer, check whether already connected or not
-func (c *ConnectionManager) IsConnected(peerId peer.ID) bool {
-
-	c.Lock.RLock()
-	defer c.Lock.RUnlock()
-
-	v, ok := c.Peers[peerId]
-	if !ok {
-		return false
-	}
-
-	return v
-
+	IsConnectedChan chan IsConnected
 }
 
 // Added - When new connection is established
@@ -41,6 +32,18 @@ func (c *ConnectionManager) Added(peerId peer.ID) {
 // Dropped - When connection with some peer is dropped
 func (c *ConnectionManager) Dropped(peerId peer.ID) {
 	c.DroppedPeerChan <- peerId
+}
+
+// IsConnected - Before attempting to (re-)establish connection
+// with peer, check whether already connected or not
+func (c *ConnectionManager) IsConnected(peerId peer.ID) bool {
+
+	responseChan := make(chan bool)
+	c.IsConnectedChan <- IsConnected{Peer: peerId, Response: responseChan}
+
+	// This is a blocking call
+	return <-responseChan
+
 }
 
 // Start - Listen for new peer we're getting connected to/ dropped
@@ -58,17 +61,33 @@ func (c *ConnectionManager) Start(ctx context.Context) {
 
 		case peer := <-c.NewPeerChan:
 
-			c.Lock.Lock()
 			c.Peers[peer] = true
-			c.Lock.Unlock()
 
 		case peer := <-c.DroppedPeerChan:
 
-			c.Lock.Lock()
 			c.Peers[peer] = false
-			c.Lock.Unlock()
 
-		case <-time.After(time.Duration(1) * time.Millisecond):
+		case query := <-c.IsConnectedChan:
+			// When worker go routines i.e. managing interaction
+			// with remote peers, asks connection manager whether we've
+			// already an working stream established with a remote peer
+			// or not, it'll be received over this channel & responded back
+			// over provided response channel
+			//
+			// Client is expected to listen on this channel for response
+
+			v, ok := c.Peers[query.Peer]
+
+			switch ok {
+
+			case true:
+				query.Response <- v
+			case false:
+				query.Response <- false
+
+			}
+
+		case <-time.After(time.Duration(10) * time.Millisecond):
 
 			peers := make([]peer.ID, 0, len(c.Peers))
 
@@ -78,13 +97,9 @@ func (c *ConnectionManager) Start(ctx context.Context) {
 				}
 			}
 
-			c.Lock.Lock()
-
 			for _, v := range peers {
 				delete(c.Peers, v)
 			}
-
-			c.Lock.Unlock()
 
 		}
 	}
@@ -93,9 +108,9 @@ func (c *ConnectionManager) Start(ctx context.Context) {
 
 func NewConnectionManager() *ConnectionManager {
 	return &ConnectionManager{
-		Lock:            sync.RWMutex{},
 		Peers:           make(map[peer.ID]bool),
 		NewPeerChan:     make(chan peer.ID, 100),
 		DroppedPeerChan: make(chan peer.ID, 100),
+		IsConnectedChan: make(chan IsConnected, 100),
 	}
 }
