@@ -189,23 +189,47 @@ func (m *MemPool) Stat(start time.Time) {
 // somehow or not
 func (m *MemPool) HandleTxFromPeer(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
 
-	if m.Exists(tx.Hash) {
-		return false
-	}
+	// Checking whether we already have this tx included in pool
+	// or not
+	exists := m.Exists(tx.Hash)
 
 	var status bool
 
+	// @note Updating state needs to be made secure, proofs can be
+	// considered, in future date
 	switch tx.Pool {
 
-	case "dropped", "confirmed":
-		// @note Clients can be notified, if not yet
+	case "dropped":
+
+		// If we already have entry for this tx & we just learnt
+		// this tx got dropped, we'll try to update our state
+		// same as our peer did
+		if exists {
+			status = m.Pending.Remove(ctx, pubsub, &TxStatus{Hash: tx.Hash, Status: DROPPED})
+		}
+
+	case "confirmed":
+
+		// If we already have entry for this tx & we just learnt
+		// this tx got confirmed, we'll try to update our state
+		// same as our peer did
+		if exists {
+			status = m.Pending.Remove(ctx, pubsub, &TxStatus{Hash: tx.Hash, Status: CONFIRMED})
+		}
+
 	case "queued":
 
-		status = m.Queued.Add(ctx, pubsub, tx)
+		// If we don't have it in our state, we'll add it
+		if !exists {
+			status = m.Queued.Add(ctx, pubsub, tx)
+		}
 
 	case "pending":
 
-		status = m.Pending.Add(ctx, pubsub, tx)
+		// If we don't have it in our state, we'll add it
+		if !exists {
+			status = m.Pending.Add(ctx, pubsub, tx)
+		}
 
 	}
 
