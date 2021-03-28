@@ -6,6 +6,7 @@ Reduce Chaos in MemPool 😌
 ## Table of Contents
 
 - [Why did you write `harmony` ?](#motivation)
+- [How is everything organised ?](#architecture)
 - [What do I need to have for installing `harmony` ?](#prerequisite)
 - [How do I get `harmony` up & running ?](#installation)
 - [How do I interact with `harmony` ?](#usage)
@@ -68,6 +69,10 @@ During my journey of exploring Ethereum MemPool, I found good initiative from [B
 - It will help you in getting better gas price prediction
 - It can be used for building real-time charts showing current network traffic
 - Many more ...
+
+## Architecture
+
+![architecture](./sc/architecture.jpg)
 
 ## Prerequisite
 
