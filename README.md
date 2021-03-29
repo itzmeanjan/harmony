@@ -174,6 +174,8 @@ This way you can keep adding `N`-many nodes to your cluster.
 
 ✅ **This is recommended practice, but you can always test multi-node set up, while relying on same Ethereum Node. In that case your interest can be putting all these `harmony` instances behind load balancer & serving client requests in better fashion & it's perfectly okay.**
 
+> ❗️ If you're using same Redis instance for multiple `harmony` nodes, make sure you've changed DB identifier or Pub/Sub topic names, to avoid any kind of clash.
+
 ---
 
 - Let's build & run `harmony`
