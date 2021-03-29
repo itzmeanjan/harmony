@@ -182,3 +182,57 @@ func (m *MemPool) Stat(start time.Time) {
 	log.Printf("❇️ Pending Tx(s) : %d | Queued Tx(s) : %d, in %s\n", m.PendingPoolLength(), m.QueuedPoolLength(), time.Now().UTC().Sub(start))
 
 }
+
+// HandleTxFromPeer - When new chunk of deserialised in-flight tx ( i.e. entering/ leaving mempool )
+// is received from any `harmony` peer, it will be checked against latest state
+// of local mempool view, to decide whether this tx can be acted upon
+// somehow or not
+func (m *MemPool) HandleTxFromPeer(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
+
+	// Checking whether we already have this tx included in pool
+	// or not
+	exists := m.Exists(tx.Hash)
+
+	var status bool
+
+	// @note Updating state needs to be made secure, proofs can be
+	// considered, in future date
+	switch tx.Pool {
+
+	case "dropped":
+
+		// If we already have entry for this tx & we just learnt
+		// this tx got dropped, we'll try to update our state
+		// same as our peer did
+		if exists {
+			status = m.Pending.Remove(ctx, pubsub, &TxStatus{Hash: tx.Hash, Status: DROPPED})
+		}
+
+	case "confirmed":
+
+		// If we already have entry for this tx & we just learnt
+		// this tx got confirmed, we'll try to update our state
+		// same as our peer did
+		if exists {
+			status = m.Pending.Remove(ctx, pubsub, &TxStatus{Hash: tx.Hash, Status: CONFIRMED})
+		}
+
+	case "queued":
+
+		// If we don't have it in our state, we'll add it
+		if !exists {
+			status = m.Queued.Add(ctx, pubsub, tx)
+		}
+
+	case "pending":
+
+		// If we don't have it in our state, we'll add it
+		if !exists {
+			status = m.Pending.Add(ctx, pubsub, tx)
+		}
+
+	}
+
+	return status
+
+}

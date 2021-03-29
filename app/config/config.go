@@ -31,6 +31,11 @@ func GetFloat(key string) float64 {
 	return viper.GetFloat64(key)
 }
 
+// GetBool - Parses config value as boolean & returns
+func GetBool(key string) bool {
+	return viper.GetBool(key)
+}
+
 // GetMemPoolPollingPeriod - Read mempool polling period & attempt to
 // parse it to string, where it's expected that this period will be
 // provided in form of time duration with millisecond level precision
@@ -152,5 +157,76 @@ func GetPortNumber() uint64 {
 	}
 
 	return 7000
+
+}
+
+// GetNetworkingPort - Libp2p service to be run on this port, used
+// for communicating with peers over P2P network
+func GetNetworkingPort() uint64 {
+
+	if port := GetUint("NetworkingPort"); port > 1024 {
+		return port
+	}
+
+	return 7001
+
+}
+
+// GetNetworkingStream - Libp2p stream name, to be for listening on this
+// & also sending messages when communicating with peer
+func GetNetworkingStream() string {
+
+	if v := Get("NetworkingStream"); len(v) != 0 {
+		return v
+	}
+
+	return "/harmony/v1.0.0"
+
+}
+
+// GetBootstrapPeer - Attempts to get user supplied bootstrap node identifier
+// so that this node can connect to it
+func GetBootstrapPeer() string {
+
+	return Get("NetworkingBootstrap")
+
+}
+
+// GetNetworkingRendezvous - This is the string with which harmony nodes will advertise
+// them with & this node will attempt to find other peers of same kind using this string
+func GetNetworkingRendezvous() string {
+
+	if v := Get("NetworkingRendezvous"); len(v) != 0 {
+		return v
+	}
+
+	return "harmony"
+
+}
+
+// GetPeerDiscoveryMode - Kademlia DHT peer discovery mode
+// 1 => Client mode
+// 2 => Server mode ( This peer can act an rendezvous point )
+func GetPeerDiscoveryMode() uint64 {
+
+	if v := GetUint("NetworkingDiscoveryMode"); v > 0 && v < 3 {
+		return v
+	}
+
+	// By default it's going to work as client i.e. won't help
+	// others in discoverying peers, when some other node
+	// attempts to use this node as rendezvous point
+	return 1
+
+}
+
+// GetNetworkingChoice - Consider configuring value for this field
+// so that you can express your desire for joining a larger pool
+// of `harmony` nodes, to get a much broader view of mempool
+//
+// Consider putting `true`, if you're interested, otherwise ignore
+func GetNetworkingChoice() bool {
+
+	return GetBool("NetworkingEnabled")
 
 }

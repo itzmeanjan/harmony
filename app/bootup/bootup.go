@@ -12,6 +12,7 @@ import (
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph"
+	"github.com/itzmeanjan/harmony/app/networking"
 )
 
 // GetNetwork - Make RPC call for reading network ID
@@ -84,6 +85,13 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	// Redis client to be used in p2p networking communication
+	// handling section for letting clients know of some newly
+	// seen mempool tx
+	if err := networking.InitRedisClient(_redis); err != nil {
+		return nil, err
+	}
+
 	// Attempt to read current network ID
 	network, err := GetNetwork(ctx, client)
 	if err != nil {
@@ -103,6 +111,12 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
+		return nil, err
+	}
+
+	// To be used when updating mempool state, in action of
+	// seeing new tx
+	if err := networking.InitMemPool(pool); err != nil {
 		return nil, err
 	}
 

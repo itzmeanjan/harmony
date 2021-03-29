@@ -6,6 +6,7 @@ Reduce Chaos in MemPool 😌
 ## Table of Contents
 
 - [Why did you write `harmony` ?](#motivation)
+- [How is everything organised ?](#architecture)
 - [What do I need to have for installing `harmony` ?](#prerequisite)
 - [How do I get `harmony` up & running ?](#installation)
 - [How do I interact with `harmony` ?](#usage)
@@ -69,6 +70,10 @@ During my journey of exploring Ethereum MemPool, I found good initiative from [B
 - It can be used for building real-time charts showing current network traffic
 - Many more ...
 
+## Architecture
+
+![architecture](./sc/architecture.jpg)
+
 ## Prerequisite
 
 - Make sure you've _`Go ( >= 1.16)`_, _`make`_ installed
@@ -122,6 +127,56 @@ RedisPassword | Authentication details for talking to Redis. **[ Not mandatory ]
 RedisDB | Redis database to be used. **[ By default there're 16 of them ]**
 ConcurrencyFactor | Whenever concurrency can be leveraged, `harmony` will create worker pool with `#-of logical CPUs x ConcurrencyFactor` go routines. **[ Can be float too ]**
 Port | Starts HTTP server on this port ( > 1024 )
+
+---
+
+### Multi-Node Cluster Setup
+
+- If you're willing to form of cluster of `harmony` nodes, so that they get a better picture of mempool, where each `harmony` node is assumed to be connected to different Ethereum Node, you need to add following options in your `.env` file.
+
+> Note : If mono-mode is preferred, you can simply ignore this section.
+
+```bash
+NetworkingEnabled=true
+NetworkingDiscoveryMode=2
+NetworkingRendezvous=this-is-rendezvous
+NetworkingPort=7001
+NetworkingStream=this-is-stream
+NetworkingBootstrap=
+```
+
+As `harmony` nodes will form a P2P network, you need to **first** switch networking on, by setting `NetworkingEnabled` to `true` ( default value is `false` ). 
+
+> If you explicitly set this field to `false`, all `Networking*` fields to be ignored.
+
+Each `harmony` node can help others to discover peers so that they can easily form a large P2P mesh network, which can be enabled by setting `NetworkingDiscoveryMode` to `2`. This field accepts either of {1, 2}, where
+
+- 1 => Client Mode : _Don't help others in discoverying their peers_  [ **Default** ]
+- 2 => Server Mode : _Do 👆_
+
+`harmony` nodes attempt to discover other peers of interest, by publishing a `rendezvous` string on P2P network & look for new peers who are publishing same `rendezvous` string. That need to be set using `NetworkingRendezvous`. Make sure all nodes of your cluster uses same rendezvous string.
+
+`harmony` nodes need to talk to each other over TCP, the port they use can be very different for each node. You can always set it with `NetworkingPort`.
+
+> `harmony` will only listen on loopback address i.e. 127.0.0.1
+
+After your `harmony` instances have discovered each other, they'll start sending some meaningful data to each other & for doing so, a pair of nodes will open a bidirectional stream between them. This stream name can be customised using `NetworkingStream`.
+
+> Make sure all nodes of your cluster attempt to contract others using same stream.
+
+During setting up a multi-node cluster, you first start a node where `NetworkingBootstrap` is kept empty, so that it'll attempt to use **IPFS** provided default bootstrap nodes, for discovering peers. Then for other nodes, you can just specify any already running `harmony` node's multiaddress, _you'll see on console log when it boots up_, as bootstrap node address. But make sure that node has `NetworkingDiscoveryMode` set to **2** i.e. Server Mode.
+
+> Your node's unique multi address will like : `/ip4/127.0.0.1/tcp/7001/p2p/QmP9mDwJ3wLhQ8DzxJ5jApyEEtsjAeSoQ7ER1T6srgredW`
+
+This way you can keep adding `N`-many nodes to your cluster.
+
+⭐️ One thing to notice, the whole purpose of multinode cluster set up is to gain much larger view of mempool, because mempool is very node specific thing, which will be satisfied if your `harmony` instances are connected to different Ethereum Nodes, who has `txpool` API enabled. 
+
+✅ **This is recommended practice, but you can always test multi-node set up, while relying on same Ethereum Node. In that case your interest can be putting all these `harmony` instances behind load balancer & serving client requests in better fashion & it's perfectly okay.**
+
+> ❗️ If you're using same Redis instance for multiple `harmony` nodes, make sure you've changed DB identifier or Pub/Sub topic names, to avoid any kind of clash.
+
+---
 
 - Let's build & run `harmony`
 
