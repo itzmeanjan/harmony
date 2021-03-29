@@ -145,32 +145,40 @@ func (m *MemPool) TopXQueuedWithLowGasPrice(x uint64) []*MemPoolTx {
 func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
 	start := time.Now().UTC()
-	if v := m.Queued.RemoveUnstuck(ctx, rpc, pubsub, m.Pending, pending, queued); v != 0 {
-		log.Printf("[➖] Removed %d unstuck tx(s) from queued tx pool, in %s\n", v, time.Now().UTC().Sub(start))
+	removedQ := m.Queued.RemoveUnstuck(ctx, rpc, pubsub, m.Pending, pending, queued)
+
+	if removedQ != 0 {
+		log.Printf("[➖] Removed %d unstuck tx(s) from queued tx pool, in %s\n", removedQ, time.Now().UTC().Sub(start))
 	}
 
 	start = time.Now().UTC()
-	if v := m.Queued.AddQueued(ctx, pubsub, queued); v != 0 {
-		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", v, time.Now().UTC().Sub(start))
+	addedQ := m.Queued.AddQueued(ctx, pubsub, queued)
+
+	if addedQ != 0 {
+		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", addedQ, time.Now().UTC().Sub(start))
 	}
 
 	start = time.Now().UTC()
-	if m.Queued.SortTxs() {
+	if (removedQ != 0 || addedQ != 0) && m.Queued.SortTxs() {
 		log.Printf("[➕] Sorted queued pool tx(s), in %s\n", time.Now().UTC().Sub(start))
 	}
 
 	start = time.Now().UTC()
-	if v := m.Pending.RemoveConfirmedAndDropped(ctx, rpc, pubsub, pending); v != 0 {
-		log.Printf("[➖] Removed %d confirmed/ dropped tx(s) from pending tx pool, in %s\n", v, time.Now().UTC().Sub(start))
+	removedP := m.Pending.RemoveConfirmedAndDropped(ctx, rpc, pubsub, pending)
+
+	if removedP != 0 {
+		log.Printf("[➖] Removed %d confirmed/ dropped tx(s) from pending tx pool, in %s\n", removedP, time.Now().UTC().Sub(start))
 	}
 
 	start = time.Now().UTC()
-	if v := m.Pending.AddPendings(ctx, pubsub, pending); v != 0 {
-		log.Printf("[➕] Added %d tx(s) to pending tx pool, in %s\n", v, time.Now().UTC().Sub(start))
+	addedP := m.Pending.AddPendings(ctx, pubsub, pending)
+
+	if addedP != 0 {
+		log.Printf("[➕] Added %d tx(s) to pending tx pool, in %s\n", addedP, time.Now().UTC().Sub(start))
 	}
 
 	start = time.Now().UTC()
-	if m.Pending.SortTxs() {
+	if (removedP != 0 || addedP != 0) && m.Pending.SortTxs() {
 		log.Printf("[➕] Sorted pending pool tx(s), in %s\n", time.Now().UTC().Sub(start))
 	}
 
