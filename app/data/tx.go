@@ -64,6 +64,7 @@ type MemPoolTx struct {
 	ConfirmedAt      time.Time
 	DroppedAt        time.Time
 	Pool             string
+	ReceivedFrom     string
 }
 
 // IsDuplicateOf - Checks whether one tx is duplicate of another one or not
