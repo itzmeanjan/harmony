@@ -54,7 +54,7 @@ func (p *PendingPool) Count() uint64 {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	return uint64(len(p.Transactions))
+	return uint64(len(p.SortedTxs))
 
 }
 

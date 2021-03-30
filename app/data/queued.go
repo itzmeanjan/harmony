@@ -58,7 +58,7 @@ func (q *QueuedPool) Count() uint64 {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	return uint64(len(q.Transactions))
+	return uint64(len(q.SortedTxs))
 
 }
 
