@@ -84,6 +84,32 @@ func findInsertionPoint(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) in
 
 }
 
+// findTxFromSlice - Given a slice where txs are ordered by gas price
+// paid in descending order & one target tx, whose hash we already know
+// we'll iteratively attempt to find out what is index of exactly that tx
+//
+// Only doing a binary search doesn't help, because there could be multiple
+// tx(s) with same gas price & we need to find out exactly that specific entry
+// matching tx hash
+//
+// Please note, `txs` slice is nothing but a view of original slice holding
+// all ordered txs, where this subslice is starting from specific index which
+// is starting point of tx(s) with this gas price paid by `tx`
+func findTxFromSlice(txs MemPoolTxsDesc, tx *MemPoolTx) int {
+
+	idx := -1
+
+	for i, v := range txs {
+		if v.Hash == tx.Hash {
+			idx = i
+			break
+		}
+	}
+
+	return idx
+
+}
+
 // findTx - Find index of tx, which is already present in this slice
 func findTx(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) int {
 
@@ -92,17 +118,11 @@ func findTx(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) int {
 	}
 
 	if low == high {
-
-		if txs[low].Hash == tx.Hash {
-			return low
-		}
-
-		return -1
-
+		return findTxFromSlice(txs[low:], tx)
 	}
 
 	mid := (low + high) / 2
-	if !(BigHexToBigDecimal(txs[mid].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) >= 0) {
+	if !(BigHexToBigDecimal(txs[mid].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) > 0) {
 		return findTx(txs, low, mid, tx)
 	}
 
