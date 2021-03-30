@@ -128,11 +128,7 @@ func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	if txs := p.DescTxsByGasPrice.get(); txs != nil {
-		return txs[:x]
-	}
-
-	return nil
+	return p.DescTxsByGasPrice.get()[:x]
 
 }
 
@@ -143,11 +139,7 @@ func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	if txs := p.AscTxsByGasPrice.get(); txs != nil {
-		return txs[len(txs)-int(x):]
-	}
-
-	return nil
+	return p.AscTxsByGasPrice.get()[:x]
 
 }
 

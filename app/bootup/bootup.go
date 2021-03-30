@@ -100,14 +100,16 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	pool := &data.MemPool{
 		Pending: &data.PendingPool{
-			Transactions: make(map[common.Hash]*data.MemPoolTx),
-			SortedTxs:    make(data.MemPoolTxsDesc, 0, 1024),
-			Lock:         &sync.RWMutex{},
+			Transactions:      make(map[common.Hash]*data.MemPoolTx),
+			AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
+			DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+			Lock:              &sync.RWMutex{},
 		},
 		Queued: &data.QueuedPool{
-			Transactions: make(map[common.Hash]*data.MemPoolTx),
-			SortedTxs:    make(data.MemPoolTxsDesc, 0, 1024),
-			Lock:         &sync.RWMutex{},
+			Transactions:      make(map[common.Hash]*data.MemPoolTx),
+			AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
+			DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+			Lock:              &sync.RWMutex{},
 		},
 	}
 
