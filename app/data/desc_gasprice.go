@@ -6,8 +6,13 @@ package data
 // in descending way, using gas price they're paying
 type MemPoolTxsDesc []*MemPoolTx
 
+// len - Number of txs present in slice
+func (m MemPoolTxsDesc) len() int {
+	return len(m)
+}
+
 // findInsertionPoint - Find index at which newly arrived tx should be entered to
-// keep this slice sorted, where it's sorted descendically as per gas price paid
+// keep this slice sorted
 func (m MemPoolTxsDesc) findInsertionPoint(low int, high int, tx *MemPoolTx) int {
 
 	if low > high {
@@ -35,8 +40,7 @@ func (m MemPoolTxsDesc) findInsertionPoint(low int, high int, tx *MemPoolTx) int
 
 }
 
-// findTx - Find index of tx, which is already present in this slice, where
-// txs are sorted descendically as per gas price paid
+// findTx - Find index of tx, which is already present in this sorted slice
 func (m MemPoolTxsDesc) findTx(low int, high int, tx *MemPoolTx) int {
 
 	if low > high {
