@@ -3,6 +3,7 @@ package data
 type TxList interface {
 	len() int
 	cap() int
+	get() []*MemPoolTx
 
 	findInsertionPoint(int, int, *MemPoolTx) int
 	findTx(int, int, *MemPoolTx) int
@@ -18,7 +19,7 @@ func Insert(txs TxList, tx *MemPoolTx) MemPoolTxsDesc {
 	n := txs.len()
 	idx := txs.findInsertionPoint(0, n-1, tx)
 
-	if n+1 <= cap(txs) {
+	if n+1 <= txs.cap() {
 
 		_txs := txs[:n+1]
 

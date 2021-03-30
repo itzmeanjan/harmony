@@ -17,6 +17,11 @@ func (m MemPoolTxsAsc) cap() int {
 	return cap(m)
 }
 
+// get - Return slice of txs
+func (m MemPoolTxsAsc) get() []*MemPoolTx {
+	return m
+}
+
 // findInsertionPoint - Find index at which newly arrived tx should be entered to
 // keep this slice sorted
 func (m MemPoolTxsAsc) findInsertionPoint(low int, high int, tx *MemPoolTx) int {
