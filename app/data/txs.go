@@ -31,6 +31,24 @@ func Insert(txs MemPoolTxsDesc, tx *MemPoolTx) MemPoolTxsDesc {
 
 }
 
+// Remove - Removes existing entry from sorted ( in terms of gas price paid ) slice of txs
+func Remove(txs MemPoolTxsDesc, tx *MemPoolTx) MemPoolTxsDesc {
+
+	n := len(txs)
+	idx := findTx(txs, 0, n-1, tx)
+	if idx == -1 {
+		// denotes nothing to delete
+		return txs
+	}
+
+	copy(txs[idx:], txs[idx+1:])
+	txs[n-1] = nil
+	txs = txs[:n-1]
+
+	return txs
+
+}
+
 // findInsertionPoint - Find index at which newly arrived tx should be entered to
 // keep this slice sorted
 func findInsertionPoint(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) int {
