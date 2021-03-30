@@ -38,11 +38,16 @@ func Insert(txs TxList, tx *MemPoolTx) TxList {
 
 	}
 
-	_txs := make([]*MemPoolTx, 0, n+1)
+	_txs := make([]*MemPoolTx, n+1)
 
 	copy(_txs, txs.get()[:idx])
 	copy(_txs[idx:], []*MemPoolTx{tx})
 	copy(_txs[idx+1:], txs.get()[idx:])
+
+	// Previous array now only contains `nil`
+	for i := 0; i < txs.len(); i++ {
+		txs.get()[i] = nil
+	}
 
 	switch txs.(type) {
 
