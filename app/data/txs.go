@@ -59,3 +59,29 @@ func findInsertionPoint(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) in
 	return findInsertionPoint(txs, mid+1, high, tx)
 
 }
+
+// findTx - Find index of tx, which is already present in this slice
+func findTx(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) int {
+
+	if low > high {
+		return -1
+	}
+
+	if low == high {
+
+		if txs[low].Hash == tx.Hash {
+			return low
+		}
+
+		return -1
+
+	}
+
+	mid := (low + high) / 2
+	if BigHexToBigDecimal(txs[mid].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) >= 0 {
+		return findTx(txs, low, mid, tx)
+	}
+
+	return findTx(txs, mid+1, high, tx)
+
+}
