@@ -90,11 +90,15 @@ func findTxFromSlice(txs []*MemPoolTx, tx *MemPoolTx) int {
 
 	idx := -1
 
-	for i, v := range txs {
-		if v.Hash == tx.Hash {
+	// Don't copy tx elements from slice, rather access them by
+	// pointer ( directly from index )
+	for i := 0; i < len(txs); i++ {
+
+		if txs[i].Hash == tx.Hash {
 			idx = i
 			break
 		}
+
 	}
 
 	return idx
