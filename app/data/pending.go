@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"log"
-	"sort"
 	"sync"
 	"time"
 
@@ -259,6 +258,9 @@ func (p *PendingPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPool
 	// After adding new tx in pending pool, also attempt to
 	// publish it to pubsub topic
 	p.PublishAdded(ctx, pubsub, tx)
+	// Insert into sorted pending tx list, keep sorted
+	p.SortedTxs = Insert(p.SortedTxs, tx)
+
 	return true
 
 }
@@ -309,6 +311,8 @@ func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txStat *
 
 	// Publishing this confirmed tx
 	p.PublishRemoved(ctx, pubsub, tx)
+	// Remove from sorted tx list, keep it sorted
+	p.SortedTxs = Remove(p.SortedTxs, tx)
 
 	delete(p.Transactions, txStat.Hash)
 
@@ -481,29 +485,5 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 	}
 
 	return count
-
-}
-
-// SortTxs - Sorts current pending tx list ascendingly
-// as per gas price paid by senders
-//
-// @note This is supposed to be invoked after every time you add
-// new tx(s) to pending pool
-func (p *PendingPool) SortTxs() bool {
-
-	txs := MemPoolTxsDesc(p.ListTxs())
-
-	if len(txs) == 0 {
-		return false
-	}
-
-	sort.Sort(&txs)
-
-	p.Lock.Lock()
-	defer p.Lock.Unlock()
-
-	p.SortedTxs = txs
-
-	return true
 
 }

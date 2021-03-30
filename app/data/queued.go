@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"log"
-	"sort"
 	"sync"
 	"time"
 
@@ -263,6 +262,9 @@ func (q *QueuedPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolT
 	// As soon as we find new entry for queued pool
 	// we publish that tx to pubsub topic
 	q.PublishAdded(ctx, pubsub, tx)
+	// Insert into sorted pending tx list, keep sorted
+	q.SortedTxs = Insert(q.SortedTxs, tx)
+
 	return true
 
 }
@@ -304,6 +306,8 @@ func (q *QueuedPool) Remove(ctx context.Context, pubsub *redis.Client, txHash co
 	// Publishing unstuck tx, this is probably going to
 	// enter pending pool now
 	q.PublishRemoved(ctx, pubsub, q.Transactions[txHash])
+	// Remove from sorted tx list, keep it sorted
+	q.SortedTxs = Remove(q.SortedTxs, tx)
 
 	delete(q.Transactions, txHash)
 
@@ -502,30 +506,5 @@ func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs ma
 	}
 
 	return count
-
-}
-
-// SortTxs - Keeping sort entries in tx list
-// for tx(s) currently living in queued pool, where sorting
-// is being done as per gas price paid by tx senders
-//
-// @note This function is supposed to be invoked every time you add
-// any new tx to queued pool
-func (q *QueuedPool) SortTxs() bool {
-
-	txs := MemPoolTxsDesc(q.ListTxs())
-
-	if len(txs) == 0 {
-		return false
-	}
-
-	sort.Sort(&txs)
-
-	q.Lock.Lock()
-	defer q.Lock.Unlock()
-
-	q.SortedTxs = txs
-
-	return true
 
 }
