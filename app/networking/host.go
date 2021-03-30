@@ -12,7 +12,8 @@ import (
 	connmgr "github.com/libp2p/go-libp2p-connmgr"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
-	libp2ptls "github.com/libp2p/go-libp2p-tls"
+	noise "github.com/libp2p/go-libp2p-noise"
+	tls "github.com/libp2p/go-libp2p-tls"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -31,13 +32,14 @@ func CreateHost(ctx context.Context) (host.Host, error) {
 		fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", config.GetNetworkingPort()),
 	}...)
 
-	security := libp2p.Security(libp2ptls.ID, libp2ptls.New)
+	_tls := libp2p.Security(tls.ID, tls.New)
+	_noise := libp2p.Security(noise.ID, noise.New)
 
 	transports := libp2p.DefaultTransports
 
 	connManager := libp2p.ConnectionManager(connmgr.NewConnManager(10, 100, time.Minute))
 
-	opts := []libp2p.Option{identity, addrs, security, transports, connManager}
+	opts := []libp2p.Option{identity, addrs, _tls, _noise, transports, connManager}
 
 	return libp2p.New(ctx, opts...)
 
