@@ -1,5 +1,11 @@
 package data
 
+// MemPoolTxsDesc - List of mempool tx(s)
+//
+// @note This structure to be used for sorting tx(s)
+// in descending way, using gas price they're paying
+type MemPoolTxsDesc []*MemPoolTx
+
 // Insert - Insert into array of sorted ( in terms of gas price paid )
 // mempool txs & keep it sorted
 //
@@ -59,7 +65,7 @@ func findInsertionPoint(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) in
 
 	if low == high {
 
-		if BigHexToBigDecimal(txs[low].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) > 0 {
+		if !(BigHexToBigDecimal(txs[low].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) > 0) {
 			return low
 		}
 
@@ -68,7 +74,7 @@ func findInsertionPoint(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) in
 	}
 
 	mid := (low + high) / 2
-	if BigHexToBigDecimal(txs[mid].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) > 0 {
+	if !(BigHexToBigDecimal(txs[mid].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) > 0) {
 
 		return findInsertionPoint(txs, low, mid, tx)
 
@@ -96,7 +102,7 @@ func findTx(txs MemPoolTxsDesc, low int, high int, tx *MemPoolTx) int {
 	}
 
 	mid := (low + high) / 2
-	if BigHexToBigDecimal(txs[mid].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) >= 0 {
+	if !(BigHexToBigDecimal(txs[mid].GasPrice).Cmp(BigHexToBigDecimal(tx.GasPrice)) >= 0) {
 		return findTx(txs, low, mid, tx)
 	}
 
