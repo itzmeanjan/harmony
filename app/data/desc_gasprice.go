@@ -11,6 +11,12 @@ func (m MemPoolTxsDesc) len() int {
 	return len(m)
 }
 
+// cap - Number of elements can be kept in slice
+// without further memory allocation
+func (m MemPoolTxsDesc) cap() int {
+	return cap(m)
+}
+
 // findInsertionPoint - Find index at which newly arrived tx should be entered to
 // keep this slice sorted
 func (m MemPoolTxsDesc) findInsertionPoint(low int, high int, tx *MemPoolTx) int {

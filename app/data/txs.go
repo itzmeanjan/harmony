@@ -1,7 +1,8 @@
 package data
 
-type MemPooltxs interface {
+type TxList interface {
 	len() int
+	cap() int
 
 	findInsertionPoint(int, int, *MemPoolTx) int
 	findTx(int, int, *MemPoolTx) int
@@ -12,10 +13,10 @@ type MemPooltxs interface {
 //
 // If more memory allocation is required for inserting new element, it'll
 // be done & new slice to be returned
-func Insert(txs MemPoolTxsDesc, tx *MemPoolTx) MemPoolTxsDesc {
+func Insert(txs TxList, tx *MemPoolTx) MemPoolTxsDesc {
 
-	n := len(txs)
-	idx := findInsertionPoint(txs, 0, n-1, tx)
+	n := txs.len()
+	idx := txs.findInsertionPoint(0, n-1, tx)
 
 	if n+1 <= cap(txs) {
 
