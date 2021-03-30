@@ -20,9 +20,10 @@ import (
 // when next block is going to be picked, when these tx(s) are going to be
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
-	Transactions map[common.Hash]*MemPoolTx
-	SortedTxs    MemPoolTxsDesc
-	Lock         *sync.RWMutex
+	Transactions      map[common.Hash]*MemPoolTx
+	AscTxsByGasPrice  TxList
+	DescTxsByGasPrice TxList
+	Lock              *sync.RWMutex
 }
 
 // Get - Given tx hash, attempts to find out tx in queued pool, if any
@@ -58,7 +59,7 @@ func (q *QueuedPool) Count() uint64 {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	return uint64(len(q.SortedTxs))
+	return uint64(q.AscTxsByGasPrice.len())
 
 }
 
@@ -131,7 +132,7 @@ func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	if txs := q.SortedTxs; txs != nil {
+	if txs := q.DescTxsByGasPrice.get(); txs != nil {
 		return txs[:x]
 	}
 
@@ -146,7 +147,7 @@ func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	if txs := q.SortedTxs; txs != nil {
+	if txs := q.AscTxsByGasPrice.get(); txs != nil {
 		return txs[len(txs)-int(x):]
 	}
 
@@ -161,9 +162,9 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.SortedTxs))
+	result := make([]*MemPoolTx, 0, q.DescTxsByGasPrice.len())
 
-	for _, tx := range q.SortedTxs {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsSentFrom(address) {
 			result = append(result, tx)
@@ -182,9 +183,9 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.SortedTxs))
+	result := make([]*MemPoolTx, 0, q.DescTxsByGasPrice.len())
 
-	for _, tx := range q.SortedTxs {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsSentTo(address) {
 			result = append(result, tx)
@@ -262,8 +263,10 @@ func (q *QueuedPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolT
 	// As soon as we find new entry for queued pool
 	// we publish that tx to pubsub topic
 	q.PublishAdded(ctx, pubsub, tx)
+
 	// Insert into sorted pending tx list, keep sorted
-	q.SortedTxs = Insert(q.SortedTxs, tx)
+	q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
+	q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
 
 	return true
 
@@ -306,8 +309,10 @@ func (q *QueuedPool) Remove(ctx context.Context, pubsub *redis.Client, txHash co
 	// Publishing unstuck tx, this is probably going to
 	// enter pending pool now
 	q.PublishRemoved(ctx, pubsub, q.Transactions[txHash])
+
 	// Remove from sorted tx list, keep it sorted
-	q.SortedTxs = Remove(q.SortedTxs, tx)
+	q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
+	q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
 
 	delete(q.Transactions, txHash)
 

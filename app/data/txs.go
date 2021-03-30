@@ -69,13 +69,14 @@ func Remove(txs TxList, tx *MemPoolTx) TxList {
 
 	copy(txs.get()[idx:], txs.get()[idx+1:])
 	txs.get()[n-1] = nil
+	_txs := txs.get()[:n-1]
 
 	switch txs.(type) {
 
 	case MemPoolTxsAsc:
-		return (MemPoolTxsAsc)(txs.get()[:n-1])
+		return (MemPoolTxsAsc)(_txs)
 	case MemPoolTxsDesc:
-		return (MemPoolTxsDesc)(txs.get()[:n-1])
+		return (MemPoolTxsDesc)(_txs)
 	default:
 		return nil
 
