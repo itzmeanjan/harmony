@@ -486,10 +486,10 @@ func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs ma
 
 	var count uint64
 
-	for _, vOuter := range txs {
-		for _, vInner := range vOuter {
+	for keyO := range txs {
+		for keyI := range txs[keyO] {
 
-			if q.Add(ctx, pubsub, vInner) {
+			if q.Add(ctx, pubsub, txs[keyO][keyI]) {
 				count++
 			}
 
