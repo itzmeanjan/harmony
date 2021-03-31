@@ -86,7 +86,8 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -97,8 +98,8 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		//
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
-		if tx.IsDuplicateOf(targetTx) {
-			result = append(result, tx)
+		if txs[i].IsDuplicateOf(targetTx) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -148,10 +149,11 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentFrom(address) {
-			result = append(result, tx)
+		if txs[i].IsSentFrom(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -169,10 +171,11 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentTo(address) {
-			result = append(result, tx)
+		if txs[i].IsSentTo(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -190,10 +193,11 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsQueuedForGTE(x) {
-			result = append(result, tx)
+		if txs[i].IsQueuedForGTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -211,10 +215,11 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsQueuedForLTE(x) {
-			result = append(result, tx)
+		if txs[i].IsQueuedForLTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -332,11 +337,11 @@ func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, m
 // into pending pool
 func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pendingPool *PendingPool, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
 
-	if len(q.Transactions) == 0 {
+	if q.Count() == 0 {
 		return 0
 	}
 
-	buffer := make([]common.Hash, 0, len(q.Transactions))
+	buffer := make([]common.Hash, 0, q.Count())
 
 	// -- Attempt to safely find out which txHashes
 	// are absent in current mempool content, i.e. denoting
@@ -351,10 +356,11 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 	// for concurrently checking status of tx(s)
 	wp := workerpool.New(config.GetConcurrencyFactor())
 
-	commChan := make(chan TxStatus, len(q.Transactions))
+	commChan := make(chan *TxStatus, q.Count())
 
 	// Attempting to concurrently check status of tx(s)
-	for _, tx := range q.Transactions {
+	_txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(_txs); i++ {
 
 		func(tx *MemPoolTx) {
 
@@ -367,7 +373,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 				// @note Because it's definitely not unstuck
 				if IsPresentInCurrentPool(queued, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: STUCK}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
 					return
 
 				}
@@ -377,7 +383,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 				// it must be moved out of queued pool
 				if IsPresentInCurrentPool(pending, tx.Hash) {
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 					return
 
 				}
@@ -389,25 +395,25 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 
 					log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
 
-					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 					return
 
 				}
 
 				if yes {
-					commChan <- TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 				} else {
-					commChan <- TxStatus{Hash: tx.Hash, Status: STUCK}
+					commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
 				}
 
 			})
 
-		}(tx)
+		}(_txs[i])
 
 	}
 
-	var received int
-	mustReceive := len(q.Transactions)
+	var received uint64
+	mustReceive := q.Count()
 
 	// Waiting for all go routines to finish
 	for v := range commChan {
@@ -448,10 +454,10 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 	//
 	// And attempting to add them to pending pool
 	// if they're supposed to be added there
-	for _, v := range buffer {
+	for i := 0; i < len(buffer); i++ {
 
 		// removing unstuck tx
-		tx := q.Remove(ctx, pubsub, v)
+		tx := q.Remove(ctx, pubsub, buffer[i])
 		if tx == nil {
 
 			log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
@@ -480,10 +486,10 @@ func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs ma
 
 	var count uint64
 
-	for _, vOuter := range txs {
-		for _, vInner := range vOuter {
+	for keyO := range txs {
+		for keyI := range txs[keyO] {
 
-			if q.Add(ctx, pubsub, vInner) {
+			if q.Add(ctx, pubsub, txs[keyO][keyI]) {
 				count++
 			}
 

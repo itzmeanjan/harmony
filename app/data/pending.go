@@ -82,7 +82,8 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -93,8 +94,8 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		//
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
-		if tx.IsDuplicateOf(targetTx) {
-			result = append(result, tx)
+		if txs[i].IsDuplicateOf(targetTx) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -144,10 +145,11 @@ func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentFrom(address) {
-			result = append(result, tx)
+		if txs[i].IsSentFrom(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -165,10 +167,11 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentTo(address) {
-			result = append(result, tx)
+		if txs[i].IsSentTo(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -186,10 +189,11 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsPendingForGTE(x) {
-			result = append(result, tx)
+		if txs[i].IsPendingForGTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -207,10 +211,11 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsPendingForLTE(x) {
-			result = append(result, tx)
+		if txs[i].IsPendingForLTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -332,7 +337,7 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 // are still in pending state
 func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
-	if len(p.Transactions) == 0 {
+	if p.Count() == 0 {
 		return 0
 	}
 
@@ -346,9 +351,10 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	// for concurrently checking status of tx(s)
 	wp := workerpool.New(config.GetConcurrencyFactor())
 
-	commChan := make(chan *TxStatus, len(p.Transactions))
+	commChan := make(chan *TxStatus, p.Count())
 
-	for _, tx := range p.Transactions {
+	_txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(_txs); i++ {
 
 		func(tx *MemPoolTx) {
 
@@ -397,14 +403,14 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 
 			})
 
-		}(tx)
+		}(_txs[i])
 
 	}
 
-	buffer := make([]*TxStatus, 0, len(p.Transactions))
+	buffer := make([]*TxStatus, 0, p.Count())
 
-	var received int
-	mustReceive := len(p.Transactions)
+	var received uint64
+	mustReceive := p.Count()
 
 	// Waiting for all go routines to finish
 	for v := range commChan {
@@ -442,9 +448,9 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	// Iteratively removing entries which are
 	// not supposed to be present in pending mempool
 	// anymore
-	for _, v := range buffer {
+	for i := 0; i < len(buffer); i++ {
 
-		if p.Remove(ctx, pubsub, v) {
+		if p.Remove(ctx, pubsub, buffer[i]) {
 			count++
 		}
 
@@ -459,10 +465,10 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 
 	var count uint64
 
-	for _, vOuter := range txs {
-		for _, vInner := range vOuter {
+	for keyO := range txs {
+		for keyI := range txs[keyO] {
 
-			if p.Add(ctx, pubsub, vInner) {
+			if p.Add(ctx, pubsub, txs[keyO][keyI]) {
 				count++
 			}
 
