@@ -7,7 +7,7 @@ require (
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
 	github.com/agnivade/levenshtein v1.1.0 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
-	github.com/ethereum/go-ethereum v1.10.0
+	github.com/ethereum/go-ethereum v1.10.1
 	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc // indirect
 	github.com/gammazero/workerpool v1.1.1
 	github.com/go-ole/go-ole v1.2.5 // indirect
@@ -19,6 +19,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.8.0
 	github.com/libp2p/go-libp2p-discovery v0.5.0
 	github.com/libp2p/go-libp2p-kad-dht v0.11.1
+	github.com/libp2p/go-libp2p-noise v0.1.1
 	github.com/libp2p/go-libp2p-tls v0.1.3
 	github.com/magiconair/properties v1.8.4 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect

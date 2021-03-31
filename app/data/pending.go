@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"log"
-	"sort"
 	"sync"
 	"time"
 
@@ -17,9 +16,10 @@ import (
 // PendingPool - Currently present pending tx(s) i.e. which are ready to
 // be mined in next block
 type PendingPool struct {
-	Transactions map[common.Hash]*MemPoolTx
-	SortedTxs    MemPoolTxsDesc
-	Lock         *sync.RWMutex
+	Transactions      map[common.Hash]*MemPoolTx
+	AscTxsByGasPrice  TxList
+	DescTxsByGasPrice TxList
+	Lock              *sync.RWMutex
 }
 
 // Get - Given tx hash, attempts to find out tx in pending pool, if any
@@ -55,7 +55,7 @@ func (p *PendingPool) Count() uint64 {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	return uint64(len(p.Transactions))
+	return uint64(p.AscTxsByGasPrice.len())
 
 }
 
@@ -82,7 +82,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -94,9 +94,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
 		if tx.IsDuplicateOf(targetTx) {
-
 			result = append(result, tx)
-
 		}
 
 	}
@@ -111,13 +109,7 @@ func (p *PendingPool) ListTxs() []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
-
-	for _, v := range p.Transactions {
-		result = append(result, v)
-	}
-
-	return result
+	return p.DescTxsByGasPrice.get()
 
 }
 
@@ -128,11 +120,7 @@ func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	if txs := p.SortedTxs; txs != nil {
-		return txs[:x]
-	}
-
-	return nil
+	return p.DescTxsByGasPrice.get()[:x]
 
 }
 
@@ -143,11 +131,7 @@ func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	if txs := p.SortedTxs; txs != nil {
-		return txs[len(txs)-int(x):]
-	}
-
-	return nil
+	return p.AscTxsByGasPrice.get()[:x]
 
 }
 
@@ -158,9 +142,9 @@ func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.SortedTxs))
+	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.SortedTxs {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		if tx.IsSentFrom(address) {
 			result = append(result, tx)
@@ -179,9 +163,9 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.SortedTxs))
+	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.SortedTxs {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		if tx.IsSentTo(address) {
 			result = append(result, tx)
@@ -200,9 +184,9 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
+	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		if tx.IsPendingForGTE(x) {
 			result = append(result, tx)
@@ -221,9 +205,9 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
+	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		if tx.IsPendingForLTE(x) {
 			result = append(result, tx)
@@ -259,6 +243,11 @@ func (p *PendingPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPool
 	// After adding new tx in pending pool, also attempt to
 	// publish it to pubsub topic
 	p.PublishAdded(ctx, pubsub, tx)
+
+	// Insert into sorted pending tx list, keep sorted
+	p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
+	p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
+
 	return true
 
 }
@@ -276,9 +265,7 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 	}
 
 	if err := pubsub.Publish(ctx, config.GetPendingTxEntryPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish new pending tx : %s\n", err.Error())
-
 	}
 
 }
@@ -310,6 +297,10 @@ func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txStat *
 	// Publishing this confirmed tx
 	p.PublishRemoved(ctx, pubsub, tx)
 
+	// Remove from sorted tx list, keep it sorted
+	p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
+	p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
+
 	delete(p.Transactions, txStat.Hash)
 
 	return true
@@ -331,9 +322,7 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 	}
 
 	if err := pubsub.Publish(ctx, config.GetPendingTxExitPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish confirmed tx : %s\n", err.Error())
-
 	}
 
 }
@@ -481,29 +470,5 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 	}
 
 	return count
-
-}
-
-// SortTxs - Sorts current pending tx list ascendingly
-// as per gas price paid by senders
-//
-// @note This is supposed to be invoked after every time you add
-// new tx(s) to pending pool
-func (p *PendingPool) SortTxs() bool {
-
-	txs := MemPoolTxsDesc(p.ListTxs())
-
-	if len(txs) == 0 {
-		return false
-	}
-
-	sort.Sort(&txs)
-
-	p.Lock.Lock()
-	defer p.Lock.Unlock()
-
-	p.SortedTxs = txs
-
-	return true
 
 }

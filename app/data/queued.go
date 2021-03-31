@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"log"
-	"sort"
 	"sync"
 	"time"
 
@@ -21,9 +20,10 @@ import (
 // when next block is going to be picked, when these tx(s) are going to be
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
-	Transactions map[common.Hash]*MemPoolTx
-	SortedTxs    MemPoolTxsDesc
-	Lock         *sync.RWMutex
+	Transactions      map[common.Hash]*MemPoolTx
+	AscTxsByGasPrice  TxList
+	DescTxsByGasPrice TxList
+	Lock              *sync.RWMutex
 }
 
 // Get - Given tx hash, attempts to find out tx in queued pool, if any
@@ -59,7 +59,7 @@ func (q *QueuedPool) Count() uint64 {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	return uint64(len(q.Transactions))
+	return uint64(q.AscTxsByGasPrice.len())
 
 }
 
@@ -86,7 +86,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -98,9 +98,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
 		if tx.IsDuplicateOf(targetTx) {
-
 			result = append(result, tx)
-
 		}
 
 	}
@@ -115,13 +113,7 @@ func (q *QueuedPool) ListTxs() []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
-
-	for _, v := range q.Transactions {
-		result = append(result, v)
-	}
-
-	return result
+	return q.DescTxsByGasPrice.get()
 
 }
 
@@ -132,11 +124,7 @@ func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	if txs := q.SortedTxs; txs != nil {
-		return txs[:x]
-	}
-
-	return nil
+	return q.DescTxsByGasPrice.get()[:x]
 
 }
 
@@ -147,11 +135,7 @@ func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	if txs := q.SortedTxs; txs != nil {
-		return txs[len(txs)-int(x):]
-	}
-
-	return nil
+	return q.AscTxsByGasPrice.get()[:x]
 
 }
 
@@ -162,9 +146,9 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.SortedTxs))
+	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.SortedTxs {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsSentFrom(address) {
 			result = append(result, tx)
@@ -183,9 +167,9 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.SortedTxs))
+	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.SortedTxs {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsSentTo(address) {
 			result = append(result, tx)
@@ -204,9 +188,9 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
+	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsQueuedForGTE(x) {
 			result = append(result, tx)
@@ -225,9 +209,9 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
+	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsQueuedForLTE(x) {
 			result = append(result, tx)
@@ -263,6 +247,11 @@ func (q *QueuedPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolT
 	// As soon as we find new entry for queued pool
 	// we publish that tx to pubsub topic
 	q.PublishAdded(ctx, pubsub, tx)
+
+	// Insert into sorted pending tx list, keep sorted
+	q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
+	q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
+
 	return true
 
 }
@@ -280,9 +269,7 @@ func (q *QueuedPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg
 	}
 
 	if err := pubsub.Publish(ctx, config.GetQueuedTxEntryPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish new queued tx : %s\n", err.Error())
-
 	}
 
 }
@@ -304,6 +291,10 @@ func (q *QueuedPool) Remove(ctx context.Context, pubsub *redis.Client, txHash co
 	// Publishing unstuck tx, this is probably going to
 	// enter pending pool now
 	q.PublishRemoved(ctx, pubsub, q.Transactions[txHash])
+
+	// Remove from sorted tx list, keep it sorted
+	q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
+	q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
 
 	delete(q.Transactions, txHash)
 
@@ -328,9 +319,7 @@ func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, m
 	}
 
 	if err := pubsub.Publish(ctx, config.GetQueuedTxExitPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish unstuck tx : %s\n", err.Error())
-
 	}
 
 }
@@ -502,30 +491,5 @@ func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs ma
 	}
 
 	return count
-
-}
-
-// SortTxs - Keeping sort entries in tx list
-// for tx(s) currently living in queued pool, where sorting
-// is being done as per gas price paid by tx senders
-//
-// @note This function is supposed to be invoked every time you add
-// any new tx to queued pool
-func (q *QueuedPool) SortTxs() bool {
-
-	txs := MemPoolTxsDesc(q.ListTxs())
-
-	if len(txs) == 0 {
-		return false
-	}
-
-	sort.Sort(&txs)
-
-	q.Lock.Lock()
-	defer q.Lock.Unlock()
-
-	q.SortedTxs = txs
-
-	return true
 
 }
