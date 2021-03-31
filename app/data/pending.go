@@ -337,7 +337,7 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 // are still in pending state
 func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
 
-	if len(p.Transactions) == 0 {
+	if p.Count() == 0 {
 		return 0
 	}
 
@@ -351,9 +351,10 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	// for concurrently checking status of tx(s)
 	wp := workerpool.New(config.GetConcurrencyFactor())
 
-	commChan := make(chan *TxStatus, len(p.Transactions))
+	commChan := make(chan *TxStatus, p.Count())
 
-	for _, tx := range p.Transactions {
+	_txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(_txs); i++ {
 
 		func(tx *MemPoolTx) {
 
@@ -402,14 +403,14 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 
 			})
 
-		}(tx)
+		}(_txs[i])
 
 	}
 
-	buffer := make([]*TxStatus, 0, len(p.Transactions))
+	buffer := make([]*TxStatus, 0, p.Count())
 
-	var received int
-	mustReceive := len(p.Transactions)
+	var received uint64
+	mustReceive := p.Count()
 
 	// Waiting for all go routines to finish
 	for v := range commChan {
@@ -447,9 +448,9 @@ func (p *PendingPool) RemoveConfirmedAndDropped(ctx context.Context, rpc *rpc.Cl
 	// Iteratively removing entries which are
 	// not supposed to be present in pending mempool
 	// anymore
-	for _, v := range buffer {
+	for i := 0; i < len(buffer); i++ {
 
-		if p.Remove(ctx, pubsub, v) {
+		if p.Remove(ctx, pubsub, buffer[i]) {
 			count++
 		}
 
