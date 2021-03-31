@@ -86,7 +86,8 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -97,8 +98,8 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		//
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
-		if tx.IsDuplicateOf(targetTx) {
-			result = append(result, tx)
+		if txs[i].IsDuplicateOf(targetTx) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -148,10 +149,11 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentFrom(address) {
-			result = append(result, tx)
+		if txs[i].IsSentFrom(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -169,10 +171,11 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentTo(address) {
-			result = append(result, tx)
+		if txs[i].IsSentTo(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -190,10 +193,11 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsQueuedForGTE(x) {
-			result = append(result, tx)
+		if txs[i].IsQueuedForGTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -211,10 +215,11 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.DescTxsByGasPrice.get() {
+	txs := q.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsQueuedForLTE(x) {
-			result = append(result, tx)
+		if txs[i].IsQueuedForLTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}

@@ -82,7 +82,8 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -93,8 +94,8 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		//
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
-		if tx.IsDuplicateOf(targetTx) {
-			result = append(result, tx)
+		if txs[i].IsDuplicateOf(targetTx) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -144,10 +145,11 @@ func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentFrom(address) {
-			result = append(result, tx)
+		if txs[i].IsSentFrom(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -165,10 +167,11 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsSentTo(address) {
-			result = append(result, tx)
+		if txs[i].IsSentTo(address) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -186,10 +189,11 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsPendingForGTE(x) {
-			result = append(result, tx)
+		if txs[i].IsPendingForGTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}
@@ -207,10 +211,11 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.DescTxsByGasPrice.get() {
+	txs := p.DescTxsByGasPrice.get()
+	for i := 0; i < len(txs); i++ {
 
-		if tx.IsPendingForLTE(x) {
-			result = append(result, tx)
+		if txs[i].IsPendingForLTE(x) {
+			result = append(result, txs[i])
 		}
 
 	}
