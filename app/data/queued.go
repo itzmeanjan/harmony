@@ -86,7 +86,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -98,9 +98,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
 		if tx.IsDuplicateOf(targetTx) {
-
 			result = append(result, tx)
-
 		}
 
 	}
@@ -115,13 +113,7 @@ func (q *QueuedPool) ListTxs() []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
-
-	for _, v := range q.Transactions {
-		result = append(result, v)
-	}
-
-	return result
+	return q.DescTxsByGasPrice.get()
 
 }
 
@@ -154,7 +146,7 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, q.DescTxsByGasPrice.len())
+	result := make([]*MemPoolTx, 0, q.Count())
 
 	for _, tx := range q.DescTxsByGasPrice.get() {
 
@@ -175,7 +167,7 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, q.DescTxsByGasPrice.len())
+	result := make([]*MemPoolTx, 0, q.Count())
 
 	for _, tx := range q.DescTxsByGasPrice.get() {
 
@@ -196,9 +188,9 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
+	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsQueuedForGTE(x) {
 			result = append(result, tx)
@@ -217,9 +209,9 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	q.Lock.RLock()
 	defer q.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(q.Transactions))
+	result := make([]*MemPoolTx, 0, q.Count())
 
-	for _, tx := range q.Transactions {
+	for _, tx := range q.DescTxsByGasPrice.get() {
 
 		if tx.IsQueuedForLTE(x) {
 			result = append(result, tx)
@@ -277,9 +269,7 @@ func (q *QueuedPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg
 	}
 
 	if err := pubsub.Publish(ctx, config.GetQueuedTxEntryPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish new queued tx : %s\n", err.Error())
-
 	}
 
 }
@@ -329,9 +319,7 @@ func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, m
 	}
 
 	if err := pubsub.Publish(ctx, config.GetQueuedTxExitPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish unstuck tx : %s\n", err.Error())
-
 	}
 
 }

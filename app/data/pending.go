@@ -82,7 +82,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		// First checking if tx under radar is the one for which
 		// we're finding duplicate tx(s). If yes, we will move to next one
@@ -94,9 +94,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		// If yes, we'll include it considerable duplicate tx list, for given
 		// txHash
 		if tx.IsDuplicateOf(targetTx) {
-
 			result = append(result, tx)
-
 		}
 
 	}
@@ -111,13 +109,7 @@ func (p *PendingPool) ListTxs() []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
-
-	for _, v := range p.Transactions {
-		result = append(result, v)
-	}
-
-	return result
+	return p.DescTxsByGasPrice.get()
 
 }
 
@@ -150,7 +142,7 @@ func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, p.DescTxsByGasPrice.len())
+	result := make([]*MemPoolTx, 0, p.Count())
 
 	for _, tx := range p.DescTxsByGasPrice.get() {
 
@@ -171,7 +163,7 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, p.DescTxsByGasPrice.len())
+	result := make([]*MemPoolTx, 0, p.Count())
 
 	for _, tx := range p.DescTxsByGasPrice.get() {
 
@@ -192,9 +184,9 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
+	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		if tx.IsPendingForGTE(x) {
 			result = append(result, tx)
@@ -213,9 +205,9 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	p.Lock.RLock()
 	defer p.Lock.RUnlock()
 
-	result := make([]*MemPoolTx, 0, len(p.Transactions))
+	result := make([]*MemPoolTx, 0, p.Count())
 
-	for _, tx := range p.Transactions {
+	for _, tx := range p.DescTxsByGasPrice.get() {
 
 		if tx.IsPendingForLTE(x) {
 			result = append(result, tx)
@@ -273,9 +265,7 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 	}
 
 	if err := pubsub.Publish(ctx, config.GetPendingTxEntryPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish new pending tx : %s\n", err.Error())
-
 	}
 
 }
@@ -332,9 +322,7 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 	}
 
 	if err := pubsub.Publish(ctx, config.GetPendingTxExitPublishTopic(), _msg).Err(); err != nil {
-
 		log.Printf("[❗️] Failed to publish confirmed tx : %s\n", err.Error())
-
 	}
 
 }
