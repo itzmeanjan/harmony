@@ -103,7 +103,14 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 			Transactions:      make(map[common.Hash]*data.MemPoolTx),
 			AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
 			DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
-			Lock:              &sync.RWMutex{},
+			AddTxChan:         make(chan data.AddRequest, 1),
+			RemoveTxChan:      make(chan data.RemoveRequest, 1),
+			TxExistsChan:      make(chan data.ExistsRequest, 1),
+			GetTxChan:         make(chan data.GetRequest, 1),
+			CountTxsChan:      make(chan data.CountRequest, 1),
+			ListTxsChan:       make(chan data.ListRequest, 1),
+			PubSub:            _redis,
+			RPC:               client,
 		},
 		Queued: &data.QueuedPool{
 			Transactions:      make(map[common.Hash]*data.MemPoolTx),
@@ -112,6 +119,9 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 			Lock:              &sync.RWMutex{},
 		},
 	}
+
+	// Starting pending pool life cycle manager go routine
+	go pool.Pending.Start(ctx)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {

@@ -158,12 +158,6 @@ func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Cl
 
 	start = time.Now().UTC()
 
-	if removedP := m.Pending.RemoveConfirmedAndDropped(ctx, rpc, pubsub, pending); removedP != 0 {
-		log.Printf("[➖] Removed %d confirmed/ dropped tx(s) from pending tx pool, in %s\n", removedP, time.Now().UTC().Sub(start))
-	}
-
-	start = time.Now().UTC()
-
 	if addedP := m.Pending.AddPendings(ctx, pubsub, pending); addedP != 0 {
 		log.Printf("[➕] Added %d tx(s) to pending tx pool, in %s\n", addedP, time.Now().UTC().Sub(start))
 	}
