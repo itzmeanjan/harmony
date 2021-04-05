@@ -33,5 +33,5 @@ type CountRequest struct {
 
 // ListRequest - Listing all txs in pool
 type ListRequest struct {
-	ResponseChan chan TxList
+	ResponseChan chan []*MemPoolTx
 }

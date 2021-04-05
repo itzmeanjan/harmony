@@ -20,12 +20,12 @@ type PendingPool struct {
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
-	AddTxChan         chan *MemPoolTx
-	RemoveTxChan      chan *TxStatus
-	TxExistsChan      chan common.Hash
-	GetTxChan         chan common.Hash
-	CountTxsChan      chan interface{}
-	ListTxsChan       chan interface{}
+	AddTxChan         chan AddRequest
+	RemoveTxChan      chan RemoveRequest
+	TxExistsChan      chan ExistsRequest
+	GetTxChan         chan GetRequest
+	CountTxsChan      chan CountRequest
+	ListTxsChan       chan ListRequest
 }
 
 // Start - This method is supposed to be run as an independent
@@ -41,10 +41,27 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case <-p.AddTxChan:
 		case <-p.RemoveTxChan:
-		case <-p.TxExistsChan:
-		case <-p.GetTxChan:
-		case <-p.CountTxsChan:
-		case <-p.ListTxsChan:
+		case req := <-p.TxExistsChan:
+
+			_, ok := p.Transactions[req.Tx]
+			req.ResponseChan <- ok
+
+		case req := <-p.GetTxChan:
+
+			if tx, ok := p.Transactions[req.Tx]; ok {
+				req.ResponseChan <- tx
+				break
+			}
+
+			req.ResponseChan <- nil
+
+		case req := <-p.CountTxsChan:
+
+			req.ResponseChan <- uint64(p.AscTxsByGasPrice.len())
+
+		case req := <-p.ListTxsChan:
+
+			req.ResponseChan <- p.DescTxsByGasPrice.get()
 
 		}
 
