@@ -26,6 +26,7 @@ type PendingPool struct {
 	GetTxChan         chan GetRequest
 	CountTxsChan      chan CountRequest
 	ListTxsChan       chan ListRequest
+	PubSub            *redis.Client
 }
 
 // Start - This method is supposed to be run as an independent
@@ -39,8 +40,66 @@ func (p *PendingPool) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
-		case <-p.AddTxChan:
-		case <-p.RemoveTxChan:
+		case req := <-p.AddTxChan:
+
+			// This is what we're trying to add
+			tx := req.Tx
+
+			if _, ok := p.Transactions[tx.Hash]; ok {
+				req.ResponseChan <- false
+				break
+			}
+
+			// Marking we found this tx in mempool now
+			tx.PendingFrom = time.Now().UTC()
+			tx.Pool = "pending"
+
+			// Creating entry
+			p.Transactions[tx.Hash] = tx
+
+			// After adding new tx in pending pool, also attempt to
+			// publish it to pubsub topic
+			p.PublishAdded(ctx, p.PubSub, tx)
+
+			// Insert into sorted pending tx list, keep sorted
+			p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
+			p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
+
+			req.ResponseChan <- true
+
+		case req := <-p.RemoveTxChan:
+
+			txStat := req.TxStat
+
+			tx, ok := p.Transactions[txStat.Hash]
+			if !ok {
+				req.ResponseChan <- false
+				break
+			}
+
+			// Tx got confirmed/ dropped, to be used when computing
+			// how long it spent in pending pool
+			if txStat.Status == DROPPED {
+				tx.Pool = "dropped"
+				tx.DroppedAt = time.Now().UTC()
+			}
+
+			if txStat.Status == CONFIRMED {
+				tx.Pool = "confirmed"
+				tx.ConfirmedAt = time.Now().UTC()
+			}
+
+			// Publishing this confirmed tx
+			p.PublishRemoved(ctx, p.PubSub, tx)
+
+			// Remove from sorted tx list, keep it sorted
+			p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
+			p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
+
+			delete(p.Transactions, txStat.Hash)
+
+			req.ResponseChan <- true
+
 		case req := <-p.TxExistsChan:
 
 			_, ok := p.Transactions[req.Tx]
