@@ -20,6 +20,36 @@ type PendingPool struct {
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
+	AddTxChan         chan *MemPoolTx
+	RemoveTxChan      chan *TxStatus
+	TxExistsChan      chan common.Hash
+	GetTxChan         chan common.Hash
+	CountTxsChan      chan interface{}
+	ListTxsChan       chan interface{}
+}
+
+// Start - This method is supposed to be run as an independent
+// go routine, maintaining pending pool state, through out its life time
+func (p *PendingPool) Start(ctx context.Context) {
+
+	for {
+
+		select {
+
+		case <-ctx.Done():
+			return
+
+		case <-p.AddTxChan:
+		case <-p.RemoveTxChan:
+		case <-p.TxExistsChan:
+		case <-p.GetTxChan:
+		case <-p.CountTxsChan:
+		case <-p.ListTxsChan:
+
+		}
+
+	}
+
 }
 
 // Get - Given tx hash, attempts to find out tx in pending pool, if any
