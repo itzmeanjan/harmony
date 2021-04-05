@@ -26,6 +26,8 @@ type PendingPool struct {
 	ListTxsChan       chan ListRequest
 	PubSub            *redis.Client
 	RPC               *rpc.Client
+	LastPruned        time.Time
+	PruneAfter        time.Duration
 }
 
 // Start - This method is supposed to be run as an independent
@@ -135,8 +137,13 @@ func (p *PendingPool) Start(ctx context.Context) {
 				req.ResponseChan <- p.DescTxsByGasPrice.get()
 			}
 
-		case <-time.After(time.Duration(2000) * time.Millisecond):
+		case <-time.After(time.Duration(config.GetMemPoolPollingPeriod()) * time.Millisecond):
 
+			if !(time.Now().UTC().Sub(p.LastPruned) >= p.PruneAfter) {
+				break
+			}
+
+			p.LastPruned = time.Now().UTC()
 			if p.AscTxsByGasPrice.len() == 0 {
 				break
 			}
