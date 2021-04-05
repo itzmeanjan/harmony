@@ -112,7 +112,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 			PubSub:            _redis,
 			RPC:               client,
 			LastPruned:        time.Now().UTC(),
-			PruneAfter:        time.Duration(2) * time.Second,
+			PruneAfter:        config.GetPendingPoolPruningDelay(),
 		},
 		Queued: &data.QueuedPool{
 			Transactions:      make(map[common.Hash]*data.MemPoolTx),
