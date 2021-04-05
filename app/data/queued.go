@@ -471,7 +471,7 @@ func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub 
 
 		// pushing unstuck tx into pending pool
 		// because now it's eligible for it
-		if !pendingPool.Add(ctx, pubsub, tx) {
+		if !pendingPool.Add(ctx, tx) {
 			log.Printf("[❗️] Failed to push unstuck tx into pending pool\n")
 		}
 

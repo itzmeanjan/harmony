@@ -222,7 +222,7 @@ func (m *MemPool) HandleTxFromPeer(ctx context.Context, pubsub *redis.Client, tx
 
 		// If we don't have it in our state, we'll add it
 		if !exists {
-			status = m.Pending.Add(ctx, pubsub, tx)
+			status = m.Pending.Add(ctx, tx)
 		}
 
 	}

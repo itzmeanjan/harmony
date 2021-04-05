@@ -27,6 +27,7 @@ type PendingPool struct {
 	CountTxsChan      chan CountRequest
 	ListTxsChan       chan ListRequest
 	PubSub            *redis.Client
+	RPC               *rpc.Client
 }
 
 // Start - This method is supposed to be run as an independent
@@ -127,6 +128,109 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			if req.Order == DESC {
 				req.ResponseChan <- p.DescTxsByGasPrice.get()
+			}
+
+		case <-time.After(time.Duration(2000) * time.Millisecond):
+
+			if p.AscTxsByGasPrice.len() == 0 {
+				break
+			}
+
+			// Creating worker pool, where jobs to be submitted
+			// for concurrently checking status of tx(s)
+			wp := workerpool.New(config.GetConcurrencyFactor())
+
+			txs := p.DescTxsByGasPrice.get()
+			txCount := uint64(len(txs))
+			commChan := make(chan *TxStatus, txCount)
+
+			for i := 0; i < len(txs); i++ {
+
+				func(tx *MemPoolTx) {
+
+					wp.Submit(func() {
+
+						// Checking whether this nonce is used
+						// in any mined tx ( including this )
+						yes, err := tx.IsNonceExhausted(ctx, p.RPC)
+						if err != nil {
+
+							log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+							return
+
+						}
+
+						if !yes {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+							return
+
+						}
+
+						// Tx got confirmed/ dropped, to be used when computing
+						// how long it spent in pending pool
+						dropped, _ := tx.IsDropped(ctx, p.RPC)
+						if dropped {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
+							return
+
+						}
+
+						commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
+
+					})
+
+				}(txs[i])
+
+			}
+
+			buffer := make([]*TxStatus, 0, txCount)
+
+			var received uint64
+			mustReceive := txCount
+
+			// Waiting for all go routines to finish
+			for v := range commChan {
+
+				if v.Status == CONFIRMED || v.Status == DROPPED {
+					buffer = append(buffer, v)
+				}
+
+				received++
+				if received >= mustReceive {
+					break
+				}
+
+			}
+
+			// This call is irrelevant here, but still being made
+			//
+			// Because all workers have exited, otherwise we could have never
+			// reached this point
+			wp.Stop()
+
+			// All pending tx(s) present in last iteration
+			// also present in now
+			//
+			// Nothing has changed, so we can't remove any older tx(s)
+			if len(buffer) == 0 {
+				break
+			}
+
+			var count uint64
+
+			// Iteratively removing entries which are
+			// not supposed to be present in pending mempool
+			// anymore
+			for i := 0; i < len(buffer); i++ {
+
+				if p.Remove(ctx, p.PubSub, buffer[i]) {
+					count++
+				}
+
 			}
 
 		}
@@ -329,7 +433,7 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 //
 // If it returns `true`, it denotes, it's success, otherwise it's failure
 // because this tx is already present in pending pool
-func (p *PendingPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
+func (p *PendingPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
 	respChan := make(chan bool)
 
@@ -525,7 +629,7 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 	for keyO := range txs {
 		for keyI := range txs[keyO] {
 
-			if p.Add(ctx, pubsub, txs[keyO][keyI]) {
+			if p.Add(ctx, txs[keyO][keyI]) {
 				count++
 			}
 

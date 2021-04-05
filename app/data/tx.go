@@ -318,12 +318,12 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 }
 
-var (
-	STUCK     = 1
-	UNSTUCK   = 2
-	PENDING   = 3
-	CONFIRMED = 4
-	DROPPED   = 5
+const (
+	STUCK = iota + 1
+	UNSTUCK
+	PENDING
+	CONFIRMED
+	DROPPED
 )
 
 // TxStatus - When ever multiple go routines need to
