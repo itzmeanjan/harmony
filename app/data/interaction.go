@@ -2,6 +2,11 @@ package data
 
 import "github.com/ethereum/go-ethereum/common"
 
+const (
+	ASC = iota
+	DESC
+)
+
 // AddRequest - For adding new tx into pool
 type AddRequest struct {
 	Tx           *MemPoolTx
@@ -33,5 +38,6 @@ type CountRequest struct {
 
 // ListRequest - Listing all txs in pool
 type ListRequest struct {
+	Order        int
 	ResponseChan chan []*MemPoolTx
 }

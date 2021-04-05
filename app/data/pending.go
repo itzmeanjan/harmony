@@ -120,7 +120,14 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.ListTxsChan:
 
-			req.ResponseChan <- p.DescTxsByGasPrice.get()
+			if req.Order == ASC {
+				req.ResponseChan <- p.AscTxsByGasPrice.get()
+				break
+			}
+
+			if req.Order == DESC {
+				req.ResponseChan <- p.DescTxsByGasPrice.get()
+			}
 
 		}
 
@@ -133,35 +140,33 @@ func (p *PendingPool) Start(ctx context.Context) {
 // Returns nil, if found nothing
 func (p *PendingPool) Get(hash common.Hash) *MemPoolTx {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+	respChan := make(chan *MemPoolTx)
 
-	if tx, ok := p.Transactions[hash]; ok {
-		return tx
-	}
+	p.GetTxChan <- GetRequest{Tx: hash, ResponseChan: respChan}
 
-	return nil
+	return <-respChan
 
 }
 
 // Exists - Checks whether tx of given hash exists on pending pool or not
 func (p *PendingPool) Exists(hash common.Hash) bool {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+	respChan := make(chan bool)
 
-	_, ok := p.Transactions[hash]
-	return ok
+	p.TxExistsChan <- ExistsRequest{Tx: hash, ResponseChan: respChan}
+
+	return <-respChan
 
 }
 
 // Count - How many tx(s) currently present in pending pool
 func (p *PendingPool) Count() uint64 {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+	respChan := make(chan uint64)
 
-	return uint64(p.AscTxsByGasPrice.len())
+	p.CountTxsChan <- CountRequest{ResponseChan: respChan}
+
+	return <-respChan
 
 }
 
@@ -175,20 +180,14 @@ func (p *PendingPool) Count() uint64 {
 // nonce & sender address, as of given ones
 func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
-
-	// Denotes tx hash itself doesn't exists in pending pool
-	//
-	// So we can't find duplicate tx(s) for that txHash
-	targetTx, ok := p.Transactions[hash]
-	if !ok {
+	targetTx := p.Get(hash)
+	if targetTx == nil {
 		return nil
 	}
 
-	result := make([]*MemPoolTx, 0, p.Count())
+	txs := p.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	txs := p.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		// First checking if tx under radar is the one for which
@@ -210,48 +209,52 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 }
 
+// AscListTxs - Returns all tx(s) present in pending pool, as slice, ascending ordered as per gas price paid
+func (p *PendingPool) AscListTxs() []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	p.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: ASC}
+
+	return <-respChan
+
+}
+
+// DescListTxs - Returns all tx(s) present in pending pool, as slice, descending ordered as per gas price paid
+func (p *PendingPool) DescListTxs() []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	p.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: DESC}
+
+	return <-respChan
+
+}
+
 // ListTxs - Returns all tx(s) present in pending pool, as slice
 func (p *PendingPool) ListTxs() []*MemPoolTx {
-
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
-
-	return p.DescTxsByGasPrice.get()
-
+	return p.DescListTxs()
 }
 
 // TopXWithHighGasPrice - Returns only top `X` tx(s) present in pending mempool,
 // where being top is determined by how much gas price paid by tx sender
 func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
-
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
-
-	return p.DescTxsByGasPrice.get()[:x]
-
+	return p.DescListTxs()[:x]
 }
 
 // TopXWithLowGasPrice - Returns only top `X` tx(s) present in pending mempool,
 // where being top is determined by how low gas price paid by tx sender
 func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
-
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
-
-	return p.AscTxsByGasPrice.get()[:x]
-
+	return p.AscListTxs()[:x]
 }
 
 // SentFrom - Returns a list of pending tx(s) sent from
 // specified address
 func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+	txs := p.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, p.Count())
-
-	txs := p.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsSentFrom(address) {
@@ -268,12 +271,9 @@ func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 // specified address
 func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+	txs := p.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, p.Count())
-
-	txs := p.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsSentTo(address) {
@@ -290,12 +290,9 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 // living in mempool for more than or equals to `X` time unit
 func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+	txs := p.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, p.Count())
-
-	txs := p.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsPendingForGTE(x) {
@@ -312,12 +309,9 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 // living in mempool for less than or equals to `X` time unit
 func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+	txs := p.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, p.Count())
-
-	txs := p.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsPendingForLTE(x) {
@@ -337,29 +331,11 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 // because this tx is already present in pending pool
 func (p *PendingPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
 
-	p.Lock.Lock()
-	defer p.Lock.Unlock()
+	respChan := make(chan bool)
 
-	if _, ok := p.Transactions[tx.Hash]; ok {
-		return false
-	}
+	p.AddTxChan <- AddRequest{Tx: tx, ResponseChan: respChan}
 
-	// Marking we found this tx in mempool now
-	tx.PendingFrom = time.Now().UTC()
-	tx.Pool = "pending"
-
-	// Creating entry
-	p.Transactions[tx.Hash] = tx
-
-	// After adding new tx in pending pool, also attempt to
-	// publish it to pubsub topic
-	p.PublishAdded(ctx, pubsub, tx)
-
-	// Insert into sorted pending tx list, keep sorted
-	p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
-	p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
-
-	return true
+	return <-respChan
 
 }
 
@@ -382,39 +358,14 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 }
 
 // Remove - Removes already existing tx from pending tx pool
-// denoting it has been mined i.e. confirmed
+// denoting it has been mined i.e. confirmed/ dropped ( possible too )
 func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txStat *TxStatus) bool {
 
-	p.Lock.Lock()
-	defer p.Lock.Unlock()
+	respChan := make(chan bool)
 
-	tx, ok := p.Transactions[txStat.Hash]
-	if !ok {
-		return false
-	}
+	p.RemoveTxChan <- RemoveRequest{TxStat: txStat, ResponseChan: respChan}
 
-	// Tx got confirmed/ dropped, to be used when computing
-	// how long it spent in pending pool
-	if txStat.Status == DROPPED {
-		tx.Pool = "dropped"
-		tx.DroppedAt = time.Now().UTC()
-	}
-
-	if txStat.Status == CONFIRMED {
-		tx.Pool = "confirmed"
-		tx.ConfirmedAt = time.Now().UTC()
-	}
-
-	// Publishing this confirmed tx
-	p.PublishRemoved(ctx, pubsub, tx)
-
-	// Remove from sorted tx list, keep it sorted
-	p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
-	p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
-
-	delete(p.Transactions, txStat.Hash)
-
-	return true
+	return <-respChan
 
 }
 
