@@ -5,7 +5,6 @@ import (
 	"math"
 	"runtime"
 	"strconv"
-	"time"
 
 	"github.com/spf13/viper"
 )
@@ -58,36 +57,6 @@ func GetMemPoolPollingPeriod() uint64 {
 	}
 
 	return _period
-
-}
-
-// GetPendingPoolPruningDelay - Only attempt to prune pending pool txs
-// after this delay ( expecting input from user in terms of milliseconds )
-func GetPendingPoolPruningDelay() time.Duration {
-
-	period := Get("PendingPoolPruingDelay")
-
-	_period, err := strconv.ParseUint(period, 10, 64)
-	if err != nil {
-		return time.Duration(1000) * time.Millisecond
-	}
-
-	return time.Duration(_period) * time.Millisecond
-
-}
-
-// GetQueuedPoolPruningDelay - Only attempt to prune queued pool txs
-// after this delay ( expecting input from user in terms of milliseconds )
-func GetQueuedPoolPruningDelay() time.Duration {
-
-	period := Get("QueuedPoolPruingDelay")
-
-	_period, err := strconv.ParseUint(period, 10, 64)
-	if err != nil {
-		return time.Duration(1000) * time.Millisecond
-	}
-
-	return time.Duration(_period) * time.Millisecond
 
 }
 

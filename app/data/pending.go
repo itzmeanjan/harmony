@@ -27,8 +27,6 @@ type PendingPool struct {
 	ListTxsChan       chan ListRequest
 	PubSub            *redis.Client
 	RPC               *rpc.Client
-	LastPruned        time.Time
-	PruneAfter        time.Duration
 }
 
 // Start - This method is supposed to be run as an independent
@@ -661,7 +659,7 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 
 // Remove - Removes already existing tx from pending tx pool
 // denoting it has been mined i.e. confirmed/ dropped ( possible too )
-func (p *PendingPool) Remove(ctx context.Context, pubsub *redis.Client, txStat *TxStatus) bool {
+func (p *PendingPool) Remove(ctx context.Context, txStat *TxStatus) bool {
 
 	respChan := make(chan bool)
 
@@ -692,7 +690,7 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, 
 }
 
 // AddPendings - Update latest pending pool state
-func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) AddPendings(ctx context.Context, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	var count uint64
 
@@ -712,7 +710,7 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 
 // RemoveDroppedAndConfirmed - Given current tx list attempt to remove
 // txs which are dropped/ confirmed
-func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	resp := make(chan uint64)
 	p.RemoveTxsChan <- RemoveTxsFromPendingPool{Txs: txs, ResponseChan: resp}

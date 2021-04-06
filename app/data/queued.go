@@ -32,8 +32,6 @@ type QueuedPool struct {
 	PubSub            *redis.Client
 	RPC               *rpc.Client
 	PendingPool       *PendingPool
-	LastPruned        time.Time
-	PruneAfter        time.Duration
 }
 
 // Start - This method is supposed to be started as a
@@ -637,7 +635,7 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 //
 // If it returns `true`, it denotes, it's success, otherwise it's failure
 // because this tx is already present in pending pool
-func (q *QueuedPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
+func (q *QueuedPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
 	respChan := make(chan bool)
 
@@ -666,7 +664,7 @@ func (q *QueuedPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg
 }
 
 // Remove - Removes unstuck tx from queued pool
-func (q *QueuedPool) Remove(ctx context.Context, pubsub *redis.Client, txHash common.Hash) *MemPoolTx {
+func (q *QueuedPool) Remove(ctx context.Context, txHash common.Hash) *MemPoolTx {
 
 	respChan := make(chan *MemPoolTx)
 
@@ -699,14 +697,14 @@ func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, m
 }
 
 // AddQueued - Update latest queued pool state
-func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+func (q *QueuedPool) AddQueued(ctx context.Context, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	var count uint64
 
 	for keyO := range txs {
 		for keyI := range txs[keyO] {
 
-			if q.Add(ctx, pubsub, txs[keyO][keyI]) {
+			if q.Add(ctx, txs[keyO][keyI]) {
 				count++
 			}
 
@@ -717,9 +715,9 @@ func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs ma
 
 }
 
-// RemoveDroppedAndConfirmed - Given current tx list attempt to remove
+// RemoveUnstuck - Given current tx list attempt to remove
 // txs which are dropped/ confirmed
-func (q *QueuedPool) RemoveDroppedAndConfirmed(ctx context.Context, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
+func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
 
 	resp := make(chan uint64)
 	q.RemoveTxsChan <- RemoveTxsFromQueuedPool{Pending: pending, Queued: queued, ResponseChan: resp}
