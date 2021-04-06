@@ -115,35 +115,33 @@ func (q *QueuedPool) Start(ctx context.Context) {
 // Returns nil, if found nothing
 func (q *QueuedPool) Get(hash common.Hash) *MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	respChan := make(chan *MemPoolTx)
 
-	if tx, ok := q.Transactions[hash]; ok {
-		return tx
-	}
+	q.GetTxChan <- GetRequest{Tx: hash, ResponseChan: respChan}
 
-	return nil
+	return <-respChan
 
 }
 
 // Exists - Checks whether tx of given hash exists on queued pool or not
 func (q *QueuedPool) Exists(hash common.Hash) bool {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	respChan := make(chan bool)
 
-	_, ok := q.Transactions[hash]
-	return ok
+	q.TxExistsChan <- ExistsRequest{Tx: hash, ResponseChan: respChan}
+
+	return <-respChan
 
 }
 
 // Count - How many tx(s) currently present in pending pool
 func (q *QueuedPool) Count() uint64 {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	respChan := make(chan uint64)
 
-	return uint64(q.AscTxsByGasPrice.len())
+	q.CountTxsChan <- CountRequest{ResponseChan: respChan}
+
+	return <-respChan
 
 }
 
@@ -157,20 +155,14 @@ func (q *QueuedPool) Count() uint64 {
 // nonce & sender address, as of given ones
 func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
-
-	// Denotes tx hash itself doesn't exists in queued pool
-	//
-	// So we can't find duplicate tx(s) for that txHash
-	targetTx, ok := q.Transactions[hash]
-	if !ok {
+	targetTx := q.Get(hash)
+	if targetTx == nil {
 		return nil
 	}
 
-	result := make([]*MemPoolTx, 0, q.Count())
+	txs := q.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	txs := q.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		// First checking if tx under radar is the one for which
@@ -192,48 +184,52 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 }
 
+// AscListTxs - Returns all tx(s) present in queued pool, as slice, ascending ordered as per gas price paid
+func (q *QueuedPool) AscListTxs() []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	q.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: ASC}
+
+	return <-respChan
+
+}
+
+// DescListTxs - Returns all tx(s) present in queued pool, as slice, descending ordered as per gas price paid
+func (q *QueuedPool) DescListTxs() []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	q.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: DESC}
+
+	return <-respChan
+
+}
+
 // ListTxs - Returns all tx(s) present in queued pool, as slice
 func (q *QueuedPool) ListTxs() []*MemPoolTx {
-
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
-
-	return q.DescTxsByGasPrice.get()
-
+	return q.DescListTxs()
 }
 
 // TopXWithHighGasPrice - Returns only top `X` tx(s) present in queued mempool,
 // where being top is determined by how much gas price paid by tx sender
 func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
-
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
-
-	return q.DescTxsByGasPrice.get()[:x]
-
+	return q.DescListTxs()[:x]
 }
 
 // TopXWithLowGasPrice - Returns only top `X` tx(s) present in queued mempool,
 // where being top is determined by how low gas price paid by tx sender
 func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
-
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
-
-	return q.AscTxsByGasPrice.get()[:x]
-
+	return q.AscListTxs()[:x]
 }
 
 // SentFrom - Returns a list of queued tx(s) sent from
 // specified address
 func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, q.Count())
-
-	txs := q.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsSentFrom(address) {
@@ -250,12 +246,9 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 // specified address
 func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, q.Count())
-
-	txs := q.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsSentTo(address) {
@@ -272,12 +265,9 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 // living in mempool for more than or equals to `X` time unit
 func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, q.Count())
-
-	txs := q.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsQueuedForGTE(x) {
@@ -294,12 +284,9 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 // living in mempool for less than or equals to `X` time unit
 func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	result := make([]*MemPoolTx, 0, len(txs))
 
-	result := make([]*MemPoolTx, 0, q.Count())
-
-	txs := q.DescTxsByGasPrice.get()
 	for i := 0; i < len(txs); i++ {
 
 		if txs[i].IsQueuedForLTE(x) {
