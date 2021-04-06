@@ -26,6 +26,13 @@ type RemovedUnstuckTx struct {
 	ResponseChan chan *MemPoolTx
 }
 
+// RemoveTxsRequest - For checking which txs can be removed
+// from pending pool, this request to be sent to pending pool manager
+type RemoveTxsFromPendingPool struct {
+	Txs          map[string]map[string]*MemPoolTx
+	ResponseChan chan uint64
+}
+
 // ExistsRequest - Checking whether tx is present in pool or not
 type ExistsRequest struct {
 	Tx           common.Hash

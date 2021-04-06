@@ -20,6 +20,7 @@ type PendingPool struct {
 	DescTxsByGasPrice TxList
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemoveRequest
+	RemoveTxsChan     chan RemoveTxsFromPendingPool
 	TxExistsChan      chan ExistsRequest
 	GetTxChan         chan GetRequest
 	CountTxsChan      chan CountRequest
@@ -108,47 +109,12 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			req.ResponseChan <- txRemover(req.TxStat)
 
-		case req := <-p.TxExistsChan:
+		case req := <-p.RemoveTxsChan:
 
-			_, ok := p.Transactions[req.Tx]
-			req.ResponseChan <- ok
-
-		case req := <-p.GetTxChan:
-
-			if tx, ok := p.Transactions[req.Tx]; ok {
-				req.ResponseChan <- tx
+			if p.DescTxsByGasPrice.len() == 0 {
 				break
 			}
 
-			req.ResponseChan <- nil
-
-		case req := <-p.CountTxsChan:
-
-			req.ResponseChan <- uint64(p.AscTxsByGasPrice.len())
-
-		case req := <-p.ListTxsChan:
-
-			if req.Order == ASC {
-				req.ResponseChan <- p.AscTxsByGasPrice.get()
-				break
-			}
-
-			if req.Order == DESC {
-				req.ResponseChan <- p.DescTxsByGasPrice.get()
-			}
-
-		case <-time.After(time.Duration(config.GetMemPoolPollingPeriod()) * time.Millisecond):
-
-			if !(time.Now().UTC().Sub(p.LastPruned) >= p.PruneAfter) {
-				break
-			}
-
-			p.LastPruned = time.Now().UTC()
-			if p.AscTxsByGasPrice.len() == 0 {
-				break
-			}
-
-			start := time.Now().UTC()
 			// Creating worker pool, where jobs to be submitted
 			// for concurrently checking status of tx(s)
 			wp := workerpool.New(config.GetConcurrencyFactor())
@@ -162,6 +128,14 @@ func (p *PendingPool) Start(ctx context.Context) {
 				func(tx *MemPoolTx) {
 
 					wp.Submit(func() {
+
+						// If it's present in current pool, it's pending
+						if IsPresentInCurrentPool(req.Txs, tx.Hash) {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+							return
+
+						}
 
 						// Checking whether this nonce is used
 						// in any mined tx ( including this )
@@ -246,7 +220,36 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			}
 
-			log.Printf("[➖] Removed %d confirmed/ dropped tx(s) from pending tx pool, in %s\n", count, time.Now().UTC().Sub(start))
+			req.ResponseChan <- count
+
+		case req := <-p.TxExistsChan:
+
+			_, ok := p.Transactions[req.Tx]
+			req.ResponseChan <- ok
+
+		case req := <-p.GetTxChan:
+
+			if tx, ok := p.Transactions[req.Tx]; ok {
+				req.ResponseChan <- tx
+				break
+			}
+
+			req.ResponseChan <- nil
+
+		case req := <-p.CountTxsChan:
+
+			req.ResponseChan <- uint64(p.AscTxsByGasPrice.len())
+
+		case req := <-p.ListTxsChan:
+
+			if req.Order == ASC {
+				req.ResponseChan <- p.AscTxsByGasPrice.get()
+				break
+			}
+
+			if req.Order == DESC {
+				req.ResponseChan <- p.DescTxsByGasPrice.get()
+			}
 
 		}
 
@@ -702,5 +705,16 @@ func (p *PendingPool) AddPendings(ctx context.Context, pubsub *redis.Client, txs
 	}
 
 	return count
+
+}
+
+// RemoveDroppedAndConfirmed - Given current tx list attempt to remove
+// txs which are dropped/ confirmed
+func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+
+	resp := make(chan uint64)
+	p.RemoveTxsChan <- RemoveTxsFromPendingPool{Txs: txs, ResponseChan: resp}
+
+	return <-resp
 
 }
