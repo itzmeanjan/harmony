@@ -47,7 +47,33 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 		case <-ctx.Done():
 			return
-		case <-q.AddTxChan:
+		case req := <-q.AddTxChan:
+
+			// This is what we're trying to add
+			tx := req.Tx
+
+			if _, ok := q.Transactions[tx.Hash]; ok {
+				req.ResponseChan <- false
+				break
+			}
+
+			// Marking we found this tx in mempool now
+			tx.QueuedAt = time.Now().UTC()
+			tx.Pool = "queued"
+
+			// Creating entry
+			q.Transactions[tx.Hash] = tx
+
+			// As soon as we find new entry for queued pool
+			// we publish that tx to pubsub topic
+			q.PublishAdded(ctx, q.PubSub, tx)
+
+			// Insert into sorted pending tx list, keep sorted
+			q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
+			q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
+
+			req.ResponseChan <- true
+
 		case <-q.RemoveTxChan:
 		case req := <-q.TxExistsChan:
 
@@ -293,29 +319,11 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 // because this tx is already present in pending pool
 func (q *QueuedPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
 
-	q.Lock.Lock()
-	defer q.Lock.Unlock()
+	respChan := make(chan bool)
 
-	if _, ok := q.Transactions[tx.Hash]; ok {
-		return false
-	}
+	q.AddTxChan <- AddRequest{Tx: tx, ResponseChan: respChan}
 
-	// Marking we found this tx in mempool now
-	tx.QueuedAt = time.Now().UTC()
-	tx.Pool = "queued"
-
-	// Creating entry
-	q.Transactions[tx.Hash] = tx
-
-	// As soon as we find new entry for queued pool
-	// we publish that tx to pubsub topic
-	q.PublishAdded(ctx, pubsub, tx)
-
-	// Insert into sorted pending tx list, keep sorted
-	q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
-	q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
-
-	return true
+	return <-respChan
 
 }
 
