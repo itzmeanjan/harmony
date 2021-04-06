@@ -159,10 +159,10 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 			}
 
-			buffer := make([]common.Hash, 0, q.Count())
+			buffer := make([]common.Hash, 0, txCount)
 
 			var received uint64
-			mustReceive := q.Count()
+			mustReceive := txCount
 
 			// Waiting for all go routines to finish
 			for v := range commChan {
