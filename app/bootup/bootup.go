@@ -139,8 +139,9 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		Queued:  queuedPool,
 	}
 
-	// Starting pending pool life cycle manager go routine
+	// Starting pool life cycle manager go routine
 	go pool.Pending.Start(ctx)
+	go pool.Queued.Start(ctx)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
