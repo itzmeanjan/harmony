@@ -30,7 +30,7 @@ type RemovedUnstuckTx struct {
 // from pending pool, this request to be sent to pending pool manager
 type RemoveTxsFromPendingPool struct {
 	Txs          map[string]map[string]*MemPoolTx
-	ResponseChan chan uint64
+	ResponseChan chan bool
 }
 
 // RemoveTxsFromQueuedPool - For updating local queued pool state, request of

@@ -140,9 +140,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 						yes, err := tx.IsUnstuck(ctx, q.RPC)
 						if err != nil {
 
-							log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
-
-							commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+							commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
 							return
 
 						}

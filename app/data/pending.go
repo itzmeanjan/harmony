@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -18,6 +19,8 @@ type PendingPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
+	Lock              *sync.Mutex
+	IsPruning         bool
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemoveRequest
 	RemoveTxsChan     chan RemoveTxsFromPendingPool
@@ -90,16 +93,22 @@ func (p *PendingPool) Start(ctx context.Context) {
 			tx.PendingFrom = time.Now().UTC()
 			tx.Pool = "pending"
 
+			// --- Critical section, starts
+			p.Lock.Lock()
+
 			// Creating entry
 			p.Transactions[tx.Hash] = tx
-
-			// After adding new tx in pending pool, also attempt to
-			// publish it to pubsub topic
-			p.PublishAdded(ctx, p.PubSub, tx)
 
 			// Insert into sorted pending tx list, keep sorted
 			p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
 			p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
+
+			p.Lock.Unlock()
+			// --- ends here
+
+			// After adding new tx in pending pool, also attempt to
+			// publish it to pubsub topic
+			p.PublishAdded(ctx, p.PubSub, tx)
 
 			req.ResponseChan <- true
 
@@ -109,118 +118,137 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.RemoveTxsChan:
 
+			if p.IsPruning {
+				req.ResponseChan <- false
+				break
+			}
+
 			if p.DescTxsByGasPrice.len() == 0 {
-				req.ResponseChan <- 0
+				req.ResponseChan <- false
 				break
 			}
 
-			// Creating worker pool, where jobs to be submitted
-			// for concurrently checking status of tx(s)
-			wp := workerpool.New(config.GetConcurrencyFactor())
+			p.IsPruning = true
+			go func() {
 
-			txs := p.DescTxsByGasPrice.get()
-			txCount := uint64(len(txs))
-			commChan := make(chan *TxStatus, txCount)
+				defer func() {
+					p.IsPruning = false
+				}()
 
-			for i := 0; i < len(txs); i++ {
+				start := time.Now().UTC()
 
-				func(tx *MemPoolTx) {
+				// Creating worker pool, where jobs to be submitted
+				// for concurrently checking status of tx(s)
+				wp := workerpool.New(config.GetConcurrencyFactor())
 
-					wp.Submit(func() {
+				txs := p.DescTxsByGasPrice.get()
+				txCount := uint64(len(txs))
+				commChan := make(chan *TxStatus, txCount)
 
-						// If it's present in current pool, it's pending
-						if IsPresentInCurrentPool(req.Txs, tx.Hash) {
+				for i := 0; i < len(txs); i++ {
 
-							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-							return
+					func(tx *MemPoolTx) {
 
-						}
+						wp.Submit(func() {
 
-						// Checking whether this nonce is used
-						// in any mined tx ( including this )
-						yes, err := tx.IsNonceExhausted(ctx, p.RPC)
-						if err != nil {
+							// If it's present in current pool, it's pending
+							if IsPresentInCurrentPool(req.Txs, tx.Hash) {
 
-							log.Printf("[❗️] Failed to check if nonce exhausted : %s\n", err.Error())
+								commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+								return
 
-							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-							return
+							}
 
-						}
+							// Checking whether this nonce is used
+							// in any mined tx ( including this )
+							yes, err := tx.IsNonceExhausted(ctx, p.RPC)
+							if err != nil {
 
-						if !yes {
+								commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+								return
 
-							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-							return
+							}
 
-						}
+							if !yes {
 
-						// Tx got confirmed/ dropped, to be used when computing
-						// how long it spent in pending pool
-						dropped, _ := tx.IsDropped(ctx, p.RPC)
-						if dropped {
+								commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+								return
 
-							commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
-							return
+							}
 
-						}
+							// Tx got confirmed/ dropped, to be used when computing
+							// how long it spent in pending pool
+							dropped, _ := tx.IsDropped(ctx, p.RPC)
+							if dropped {
 
-						commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
+								commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
+								return
 
-					})
+							}
 
-				}(txs[i])
+							commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
 
-			}
+						})
 
-			buffer := make([]*TxStatus, 0, txCount)
+					}(txs[i])
 
-			var received uint64
-			mustReceive := txCount
-
-			// Waiting for all go routines to finish
-			for v := range commChan {
-
-				if v.Status == CONFIRMED || v.Status == DROPPED {
-					buffer = append(buffer, v)
 				}
 
-				received++
-				if received >= mustReceive {
-					break
+				buffer := make([]*TxStatus, 0, txCount)
+
+				var received uint64
+				mustReceive := txCount
+
+				// Waiting for all go routines to finish
+				for v := range commChan {
+
+					if v.Status == CONFIRMED || v.Status == DROPPED {
+						buffer = append(buffer, v)
+					}
+
+					received++
+					if received >= mustReceive {
+						break
+					}
+
 				}
 
-			}
+				// This call is irrelevant here, but still being made
+				//
+				// Because all workers have exited, otherwise we could have never
+				// reached this point
+				wp.Stop()
 
-			// This call is irrelevant here, but still being made
-			//
-			// Because all workers have exited, otherwise we could have never
-			// reached this point
-			wp.Stop()
-
-			// All pending tx(s) present in last iteration
-			// also present in now
-			//
-			// Nothing has changed, so we can't remove any older tx(s)
-			if len(buffer) == 0 {
-				req.ResponseChan <- 0
-				break
-			}
-
-			var count uint64
-
-			// Iteratively removing entries which are
-			// not supposed to be present in pending mempool
-			// anymore
-			for i := 0; i < len(buffer); i++ {
-
-				if txRemover(buffer[i]) {
-					count++
+				// All pending tx(s) present in last iteration
+				// also present in now
+				//
+				// Nothing has changed, so we can't remove any older tx(s)
+				if len(buffer) == 0 {
+					return
 				}
 
-			}
+				var count uint64
 
-			req.ResponseChan <- count
+				// Iteratively removing entries which are
+				// not supposed to be present in pending mempool
+				// anymore
+				for i := 0; i < len(buffer); i++ {
+
+					p.Lock.Lock()
+
+					if txRemover(buffer[i]) {
+						count++
+					}
+
+					p.Lock.Unlock()
+
+				}
+
+				log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", count, time.Now().UTC().Sub(start))
+
+			}()
+
+			req.ResponseChan <- true
 
 		case req := <-p.TxExistsChan:
 
@@ -710,9 +738,9 @@ func (p *PendingPool) AddPendings(ctx context.Context, txs map[string]map[string
 
 // RemoveDroppedAndConfirmed - Given current tx list attempt to remove
 // txs which are dropped/ confirmed
-func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, txs map[string]map[string]*MemPoolTx) uint64 {
+func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, txs map[string]map[string]*MemPoolTx) bool {
 
-	resp := make(chan uint64)
+	resp := make(chan bool)
 	p.RemoveTxsChan <- RemoveTxsFromPendingPool{Txs: txs, ResponseChan: resp}
 
 	return <-resp
