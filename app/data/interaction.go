@@ -33,6 +33,15 @@ type RemoveTxsFromPendingPool struct {
 	ResponseChan chan uint64
 }
 
+// RemoveTxsFromQueuedPool - For updating local queued pool state, request of
+// this form to be sent to pool manager over channel, where it'll check which txs
+// are likely to be unstuck & has moved to pending pool
+type RemoveTxsFromQueuedPool struct {
+	Pending      map[string]map[string]*MemPoolTx
+	Queued       map[string]map[string]*MemPoolTx
+	ResponseChan chan uint64
+}
+
 // ExistsRequest - Checking whether tx is present in pool or not
 type ExistsRequest struct {
 	Tx           common.Hash

@@ -112,6 +112,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 		case req := <-p.RemoveTxsChan:
 
 			if p.DescTxsByGasPrice.len() == 0 {
+				req.ResponseChan <- 0
 				break
 			}
 
@@ -204,6 +205,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 			//
 			// Nothing has changed, so we can't remove any older tx(s)
 			if len(buffer) == 0 {
+				req.ResponseChan <- 0
 				break
 			}
 

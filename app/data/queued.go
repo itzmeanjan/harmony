@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -23,9 +22,9 @@ type QueuedPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
-	Lock              *sync.RWMutex
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemovedUnstuckTx
+	RemoveTxsChan     chan RemoveTxsFromQueuedPool
 	TxExistsChan      chan ExistsRequest
 	GetTxChan         chan GetRequest
 	CountTxsChan      chan CountRequest
@@ -103,60 +102,40 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			// if removed will return non-nil reference to removed tx
 			req.ResponseChan <- txRemover(req.Hash)
 
-		case req := <-q.TxExistsChan:
+		case req := <-q.RemoveTxsChan:
 
-			_, ok := q.Transactions[req.Tx]
-			req.ResponseChan <- ok
-
-		case req := <-q.GetTxChan:
-
-			if tx, ok := q.Transactions[req.Tx]; ok {
-				req.ResponseChan <- tx
+			if q.DescTxsByGasPrice.len() == 0 {
+				req.ResponseChan <- 0
 				break
 			}
 
-			req.ResponseChan <- nil
-
-		case req := <-q.CountTxsChan:
-
-			req.ResponseChan <- uint64(q.AscTxsByGasPrice.len())
-
-		case req := <-q.ListTxsChan:
-
-			if req.Order == ASC {
-				req.ResponseChan <- q.AscTxsByGasPrice.get()
-				break
-			}
-
-			if req.Order == DESC {
-				req.ResponseChan <- q.DescTxsByGasPrice.get()
-			}
-
-		case <-time.After(time.Duration(config.GetMemPoolPollingPeriod()) * time.Millisecond):
-
-			if !(time.Now().UTC().Sub(q.LastPruned) >= q.PruneAfter) {
-				break
-			}
-
-			q.LastPruned = time.Now().UTC()
-			if q.AscTxsByGasPrice.len() == 0 {
-				break
-			}
-
-			start := time.Now().UTC()
 			// Creating worker pool, where jobs to be submitted
 			// for concurrently checking status of tx(s)
 			wp := workerpool.New(config.GetConcurrencyFactor())
 
-			commChan := make(chan *TxStatus, q.Count())
+			txs := q.DescTxsByGasPrice.get()
+			txCount := uint64(len(txs))
+			commChan := make(chan *TxStatus, txCount)
 
-			// Attempting to concurrently check status of tx(s)
-			_txs := q.DescTxsByGasPrice.get()
-			for i := 0; i < len(_txs); i++ {
+			for i := 0; i < len(txs); i++ {
 
 				func(tx *MemPoolTx) {
 
 					wp.Submit(func() {
+
+						if IsPresentInCurrentPool(req.Queued, tx.Hash) {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
+							return
+
+						}
+
+						if IsPresentInCurrentPool(req.Pending, tx.Hash) {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+							return
+
+						}
 
 						// Finally checking whether this tx is unstuck or not
 						// by doing nonce comparison
@@ -178,7 +157,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 					})
 
-				}(_txs[i])
+				}(txs[i])
 
 			}
 
@@ -207,7 +186,6 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			// reached this point
 			wp.Stop()
 
-			q.Lock.RUnlock()
 			// -- Done with safely reading to be removed tx(s)
 
 			// All queued tx(s) present in last iteration
@@ -215,6 +193,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			//
 			// Nothing has changed, so we can't remove any older tx(s)
 			if len(buffer) == 0 {
+				req.ResponseChan <- 0
 				break
 			}
 
@@ -249,7 +228,36 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 			}
 
-			log.Printf("[➖] Removed %d confirmed/ dropped tx(s) from pending tx pool, in %s\n", count, time.Now().UTC().Sub(start))
+			req.ResponseChan <- count
+
+		case req := <-q.TxExistsChan:
+
+			_, ok := q.Transactions[req.Tx]
+			req.ResponseChan <- ok
+
+		case req := <-q.GetTxChan:
+
+			if tx, ok := q.Transactions[req.Tx]; ok {
+				req.ResponseChan <- tx
+				break
+			}
+
+			req.ResponseChan <- nil
+
+		case req := <-q.CountTxsChan:
+
+			req.ResponseChan <- uint64(q.AscTxsByGasPrice.len())
+
+		case req := <-q.ListTxsChan:
+
+			if req.Order == ASC {
+				req.ResponseChan <- q.AscTxsByGasPrice.get()
+				break
+			}
+
+			if req.Order == DESC {
+				req.ResponseChan <- q.DescTxsByGasPrice.get()
+			}
 
 		}
 
@@ -706,5 +714,16 @@ func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs ma
 	}
 
 	return count
+
+}
+
+// RemoveDroppedAndConfirmed - Given current tx list attempt to remove
+// txs which are dropped/ confirmed
+func (q *QueuedPool) RemoveDroppedAndConfirmed(ctx context.Context, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
+
+	resp := make(chan uint64)
+	q.RemoveTxsChan <- RemoveTxsFromQueuedPool{Pending: pending, Queued: queued, ResponseChan: resp}
+
+	return <-resp
 
 }
