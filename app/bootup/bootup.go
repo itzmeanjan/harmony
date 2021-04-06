@@ -98,28 +98,45 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	// initialising pending pool
+	pendingPool := &data.PendingPool{
+		Transactions:      make(map[common.Hash]*data.MemPoolTx),
+		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
+		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+		AddTxChan:         make(chan data.AddRequest, 1),
+		RemoveTxChan:      make(chan data.RemoveRequest, 1),
+		TxExistsChan:      make(chan data.ExistsRequest, 1),
+		GetTxChan:         make(chan data.GetRequest, 1),
+		CountTxsChan:      make(chan data.CountRequest, 1),
+		ListTxsChan:       make(chan data.ListRequest, 1),
+		PubSub:            _redis,
+		RPC:               client,
+		LastPruned:        time.Now().UTC(),
+		PruneAfter:        config.GetPendingPoolPruningDelay(),
+	}
+
+	// initialising queued pool
+	queuedPool := &data.QueuedPool{
+		Transactions:      make(map[common.Hash]*data.MemPoolTx),
+		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
+		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+		Lock:              &sync.RWMutex{},
+		AddTxChan:         make(chan data.AddRequest, 1),
+		RemoveTxChan:      make(chan data.RemovedUnstuckTx, 1),
+		TxExistsChan:      make(chan data.ExistsRequest, 1),
+		GetTxChan:         make(chan data.GetRequest, 1),
+		CountTxsChan:      make(chan data.CountRequest, 1),
+		ListTxsChan:       make(chan data.ListRequest, 1),
+		PubSub:            _redis,
+		RPC:               client,
+		PendingPool:       pendingPool,
+		LastPruned:        time.Now().UTC(),
+		PruneAfter:        config.GetQueuedPoolPruningDelay(),
+	}
+
 	pool := &data.MemPool{
-		Pending: &data.PendingPool{
-			Transactions:      make(map[common.Hash]*data.MemPoolTx),
-			AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-			DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
-			AddTxChan:         make(chan data.AddRequest, 1),
-			RemoveTxChan:      make(chan data.RemoveRequest, 1),
-			TxExistsChan:      make(chan data.ExistsRequest, 1),
-			GetTxChan:         make(chan data.GetRequest, 1),
-			CountTxsChan:      make(chan data.CountRequest, 1),
-			ListTxsChan:       make(chan data.ListRequest, 1),
-			PubSub:            _redis,
-			RPC:               client,
-			LastPruned:        time.Now().UTC(),
-			PruneAfter:        config.GetPendingPoolPruningDelay(),
-		},
-		Queued: &data.QueuedPool{
-			Transactions:      make(map[common.Hash]*data.MemPoolTx),
-			AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-			DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
-			Lock:              &sync.RWMutex{},
-		},
+		Pending: pendingPool,
+		Queued:  queuedPool,
 	}
 
 	// Starting pending pool life cycle manager go routine

@@ -353,11 +353,6 @@ func (q *QueuedPool) DescListTxs() []*MemPoolTx {
 
 }
 
-// ListTxs - Returns all tx(s) present in queued pool, as slice
-func (q *QueuedPool) ListTxs() []*MemPoolTx {
-	return q.DescListTxs()
-}
-
 // TopXWithHighGasPrice - Returns only top `X` tx(s) present in queued mempool,
 // where being top is determined by how much gas price paid by tx sender
 func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {

@@ -350,11 +350,6 @@ func (p *PendingPool) DescListTxs() []*MemPoolTx {
 
 }
 
-// ListTxs - Returns all tx(s) present in pending pool, as slice
-func (p *PendingPool) ListTxs() []*MemPoolTx {
-	return p.DescListTxs()
-}
-
 // TopXWithHighGasPrice - Returns only top `X` tx(s) present in pending mempool,
 // where being top is determined by how much gas price paid by tx sender
 func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {

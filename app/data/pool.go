@@ -146,12 +146,6 @@ func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Cl
 
 	start := time.Now().UTC()
 
-	if removedQ := m.Queued.RemoveUnstuck(ctx, rpc, pubsub, m.Pending, pending, queued); removedQ != 0 {
-		log.Printf("[➖] Removed %d unstuck tx(s) from queued tx pool, in %s\n", removedQ, time.Now().UTC().Sub(start))
-	}
-
-	start = time.Now().UTC()
-
 	if addedQ := m.Queued.AddQueued(ctx, pubsub, queued); addedQ != 0 {
 		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", addedQ, time.Now().UTC().Sub(start))
 	}

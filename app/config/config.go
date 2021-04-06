@@ -76,6 +76,21 @@ func GetPendingPoolPruningDelay() time.Duration {
 
 }
 
+// GetQueuedPoolPruningDelay - Only attempt to prune queued pool txs
+// after this delay ( expecting input from user in terms of milliseconds )
+func GetQueuedPoolPruningDelay() time.Duration {
+
+	period := Get("QueuedPoolPruingDelay")
+
+	_period, err := strconv.ParseUint(period, 10, 64)
+	if err != nil {
+		return time.Duration(1000) * time.Millisecond
+	}
+
+	return time.Duration(_period) * time.Millisecond
+
+}
+
 // GetPendingTxEntryPublishTopic - Read provided topic name from `.env` file
 // where newly added pending pool tx(s) to be published
 func GetPendingTxEntryPublishTopic() string {
