@@ -397,16 +397,54 @@ func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 // specified address
 func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 
+	wp := workerpool.New(config.GetConcurrencyFactor())
+
 	txs := p.DescListTxs()
-	result := make([]*MemPoolTx, 0, len(txs))
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsSentFrom(address) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if txs[i].IsSentFrom(address) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
