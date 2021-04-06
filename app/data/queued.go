@@ -24,6 +24,64 @@ type QueuedPool struct {
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
+	AddTxChan         chan AddRequest
+	RemoveTxChan      chan RemoveRequest
+	TxExistsChan      chan ExistsRequest
+	GetTxChan         chan GetRequest
+	CountTxsChan      chan CountRequest
+	ListTxsChan       chan ListRequest
+	PubSub            *redis.Client
+	RPC               *rpc.Client
+	LastPruned        time.Time
+	PruneAfter        time.Duration
+}
+
+// Start - This method is supposed to be started as a
+// seperate go routine which will manage queued pool ops
+// through out its life
+func (q *QueuedPool) Start(ctx context.Context) {
+
+	for {
+
+		select {
+
+		case <-ctx.Done():
+			return
+		case <-q.AddTxChan:
+		case <-q.RemoveTxChan:
+		case req := <-q.TxExistsChan:
+
+			_, ok := q.Transactions[req.Tx]
+			req.ResponseChan <- ok
+
+		case req := <-q.GetTxChan:
+
+			if tx, ok := q.Transactions[req.Tx]; ok {
+				req.ResponseChan <- tx
+				break
+			}
+
+			req.ResponseChan <- nil
+
+		case req := <-q.CountTxsChan:
+
+			req.ResponseChan <- uint64(q.AscTxsByGasPrice.len())
+
+		case req := <-q.ListTxsChan:
+
+			if req.Order == ASC {
+				req.ResponseChan <- q.AscTxsByGasPrice.get()
+				break
+			}
+
+			if req.Order == DESC {
+				req.ResponseChan <- q.DescTxsByGasPrice.get()
+			}
+
+		}
+
+	}
+
 }
 
 // Get - Given tx hash, attempts to find out tx in queued pool, if any
