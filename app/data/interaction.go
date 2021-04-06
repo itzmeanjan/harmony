@@ -19,6 +19,13 @@ type RemoveRequest struct {
 	ResponseChan chan bool
 }
 
+// RemovedUnstuckTx - Remove unstuck tx from queued pool, request to be
+// sent in this form
+type RemovedUnstuckTx struct {
+	Hash         common.Hash
+	ResponseChan chan *MemPoolTx
+}
+
 // ExistsRequest - Checking whether tx is present in pool or not
 type ExistsRequest struct {
 	Tx           common.Hash
