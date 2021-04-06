@@ -141,6 +141,9 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// for concurrently checking status of tx(s)
 				wp := workerpool.New(config.GetConcurrencyFactor())
 
+				// -- Critical section begins
+				p.Lock.Lock()
+
 				txs := p.DescTxsByGasPrice.get()
 				txCount := uint64(len(txs))
 				commChan := make(chan *TxStatus, txCount)
@@ -193,6 +196,9 @@ func (p *PendingPool) Start(ctx context.Context) {
 					}(txs[i])
 
 				}
+
+				p.Lock.Unlock()
+				// -- ends here
 
 				buffer := make([]*TxStatus, 0, txCount)
 
