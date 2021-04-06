@@ -155,7 +155,11 @@ func (m *MemPool) Process(ctx context.Context, pending map[string]map[string]*Me
 		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", addedQ, time.Now().UTC().Sub(start))
 	}
 
-	m.Pending.RemoveDroppedAndConfirmed(ctx, pending)
+	if m.Pending.RemoveDroppedAndConfirmed(ctx, pending) {
+		log.Printf("[✳︎] Scheduled pending pool pruning\n")
+	} else {
+		log.Printf("[❕] Pending pool pruning in progress\n")
+	}
 
 	start = time.Now().UTC()
 
