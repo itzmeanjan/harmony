@@ -304,25 +304,56 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		return nil
 	}
 
+	// Attempting to concurrently checking which txs are duplicate
+	// of a given tx hash
+	wp := workerpool.New(config.GetConcurrencyFactor())
+
 	txs := p.DescListTxs()
-	result := make([]*MemPoolTx, 0, len(txs))
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
 	for i := 0; i < len(txs); i++ {
 
-		// First checking if tx under radar is the one for which
-		// we're finding duplicate tx(s). If yes, we will move to next one
-		//
-		// Now we can check whether current tx under radar is having same nonce
-		// and sender address, as of target tx ( for which we had txHash, as input )
-		// or not
-		//
-		// If yes, we'll include it considerable duplicate tx list, for given
-		// txHash
-		if txs[i].IsDuplicateOf(targetTx) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsDuplicateOf(targetTx) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
