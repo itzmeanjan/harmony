@@ -413,7 +413,7 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 
 			wp.Submit(func() {
 
-				if txs[i].IsSentFrom(address) {
+				if tx.IsSentFrom(address) {
 					commChan <- tx
 					return
 				}
@@ -457,16 +457,54 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 // specified address
 func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 
+	wp := workerpool.New(config.GetConcurrencyFactor())
+
 	txs := q.DescListTxs()
-	result := make([]*MemPoolTx, 0, len(txs))
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsSentTo(address) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsSentTo(address) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
@@ -476,16 +514,54 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 // living in mempool for more than or equals to `X` time unit
 func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
+	wp := workerpool.New(config.GetConcurrencyFactor())
+
 	txs := q.DescListTxs()
-	result := make([]*MemPoolTx, 0, len(txs))
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsQueuedForGTE(x) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsQueuedForGTE(x) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
@@ -495,16 +571,54 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 // living in mempool for less than or equals to `X` time unit
 func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
+	wp := workerpool.New(config.GetConcurrencyFactor())
+
 	txs := q.DescListTxs()
-	result := make([]*MemPoolTx, 0, len(txs))
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsQueuedForLTE(x) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsQueuedForLTE(x) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
