@@ -302,7 +302,10 @@ func (q *QueuedPool) Start(ctx context.Context) {
 				// -- Safe reading starting here
 				q.Lock.RLock()
 
-				req.ResponseChan <- q.AscTxsByGasPrice.get()
+				copied := make([]*MemPoolTx, q.AscTxsByGasPrice.len())
+				copy(copied, q.AscTxsByGasPrice.get())
+
+				req.ResponseChan <- copied
 
 				q.Lock.RUnlock()
 				// -- ending here
@@ -313,7 +316,10 @@ func (q *QueuedPool) Start(ctx context.Context) {
 				// -- Safe reading starting here
 				q.Lock.RLock()
 
-				req.ResponseChan <- q.DescTxsByGasPrice.get()
+				copied := make([]*MemPoolTx, q.DescTxsByGasPrice.len())
+				copy(copied, q.DescTxsByGasPrice.get())
+
+				req.ResponseChan <- copied
 
 				q.Lock.RUnlock()
 				// -- ending here

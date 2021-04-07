@@ -305,7 +305,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// -- Safe reading begins
 				p.Lock.RLock()
 
-				req.ResponseChan <- p.AscTxsByGasPrice.get()
+				copied := make([]*MemPoolTx, p.AscTxsByGasPrice.len())
+				copy(copied, p.AscTxsByGasPrice.get())
+
+				req.ResponseChan <- copied
 
 				p.Lock.RUnlock()
 				// -- ends
@@ -316,7 +319,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// -- Safe reading begins
 				p.Lock.RLock()
 
-				req.ResponseChan <- p.DescTxsByGasPrice.get()
+				copied := make([]*MemPoolTx, p.DescTxsByGasPrice.len())
+				copy(copied, p.DescTxsByGasPrice.get())
+
+				req.ResponseChan <- copied
 
 				p.Lock.RUnlock()
 				// -- ends
