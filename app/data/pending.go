@@ -294,6 +294,8 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			if tx, ok := p.Transactions[req.Tx]; ok {
 				req.ResponseChan <- tx
+
+				p.Lock.RUnlock()
 				break
 			}
 

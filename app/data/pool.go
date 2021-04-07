@@ -143,13 +143,20 @@ func (m *MemPool) TopXQueuedWithLowGasPrice(x uint64) []*MemPoolTx {
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
 func (m *MemPool) Process(ctx context.Context, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
-	start := time.Now().UTC()
+	switch m.Queued.RemoveUnstuck(ctx, pending, queued) {
 
-	if removedQ := m.Queued.RemoveUnstuck(ctx, pending, queued); removedQ != 0 {
-		log.Printf("[➖] Removed %d tx(s) from queued tx pool, in %s\n", removedQ, time.Now().UTC().Sub(start))
+	case 0:
+		log.Printf("[❓] Nothing to prune yet\n")
+	case 1:
+		log.Printf("[❕] Queued pool pruning in progress\n")
+	case 2:
+		log.Printf("[✳︎] Scheduled queued pool pruning\n")
+	default:
+		log.Printf("[❗️] Unhandled response code detected\n")
+
 	}
 
-	start = time.Now().UTC()
+	start := time.Now().UTC()
 
 	if addedQ := m.Queued.AddQueued(ctx, queued); addedQ != 0 {
 		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", addedQ, time.Now().UTC().Sub(start))

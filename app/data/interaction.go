@@ -48,7 +48,7 @@ type RemoveTxsFromPendingPool struct {
 type RemoveTxsFromQueuedPool struct {
 	Pending      map[string]map[string]*MemPoolTx
 	Queued       map[string]map[string]*MemPoolTx
-	ResponseChan chan uint64
+	ResponseChan chan int
 }
 
 // ExistsRequest - Checking whether tx is present in pool or not
