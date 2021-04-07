@@ -21,7 +21,8 @@ func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.
 
 	wp := workerpool.New(runtime.NumCPU())
 	workCount := len(txs)
-	commChan := make(chan bool, workCount)
+	resultChan := make(chan bool, workCount)
+	stopChan := make(chan struct{})
 
 	var present bool
 
@@ -38,12 +39,23 @@ func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.
 				// Same as ⭐️
 				for k := range txs {
 
-					if txs[k].Hash == txHash {
-						commChan <- true
-						break
+					select {
+
+					case <-stopChan:
+						return
+
+					default:
+						if txs[k].Hash == txHash {
+							resultChan <- true
+							return
+						}
+
 					}
 
 				}
+
+				// If this worker couldnn't find anything of interest
+				resultChan <- false
 
 			})
 
@@ -54,14 +66,19 @@ func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.
 	// How many responses received from workers
 	var received int
 
-	for v := range commChan {
+	for v := range resultChan {
 		if v {
 			present = true
+
+			// No other worker will send anything here
+			// which is exactly why we're fleeing
+			close(stopChan)
+			break
 		}
 
 		received++
 		if received >= workCount {
-			// we're done receiving all responses
+			// We're done receiving all responses
 			// from all works we submitted
 			break
 		}
