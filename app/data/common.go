@@ -25,16 +25,21 @@ func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.
 
 	var present bool
 
-	for _, vOuter := range txs {
+	// @note ⭐️
+	//
+	// Don't copy value reference here, directly pass it during
+	// function invokation, while accessing value using field `k`
+	for k := range txs {
 
 		func(txs map[string]*MemPoolTx) {
 
 			wp.Submit(func() {
 
-				for _, vInner := range vOuter {
+				// Same as ⭐️
+				for k := range txs {
 
-					if vInner.Hash == txHash {
-						commChan <- present
+					if txs[k].Hash == txHash {
+						commChan <- true
 						break
 					}
 
@@ -42,7 +47,7 @@ func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.
 
 			})
 
-		}(vOuter)
+		}(txs[k])
 
 	}
 
