@@ -2,9 +2,18 @@ package data
 
 import "github.com/ethereum/go-ethereum/common"
 
+// Sorting direction representation
 const (
 	ASC = iota
 	DESC
+)
+
+// When submitting async request for pruning pending/ queued
+// pool, immediate response to be sent to client in any of these form(s)
+const (
+	EMPTY = iota
+	PRUNING
+	SCHEDULED
 )
 
 // AddRequest - For adding new tx into pool
@@ -30,7 +39,7 @@ type RemovedUnstuckTx struct {
 // from pending pool, this request to be sent to pending pool manager
 type RemoveTxsFromPendingPool struct {
 	Txs          map[string]map[string]*MemPoolTx
-	ResponseChan chan bool
+	ResponseChan chan int
 }
 
 // RemoveTxsFromQueuedPool - For updating local queued pool state, request of

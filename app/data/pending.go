@@ -19,7 +19,7 @@ type PendingPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
-	Lock              *sync.Mutex
+	Lock              *sync.RWMutex
 	IsPruning         bool
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemoveRequest
@@ -42,10 +42,19 @@ func (p *PendingPool) Start(ctx context.Context) {
 	// This is extracted out here, for ease of usability
 	txRemover := func(txStat *TxStatus) bool {
 
+		// -- Safe reading, begins
+		p.Lock.RLock()
+
 		tx, ok := p.Transactions[txStat.Hash]
 		if !ok {
+
+			p.Lock.RUnlock()
 			return false
+
 		}
+
+		p.Lock.RUnlock()
+		// -- reading ends
 
 		// Tx got confirmed/ dropped, to be used when computing
 		// how long it spent in pending pool
@@ -59,14 +68,20 @@ func (p *PendingPool) Start(ctx context.Context) {
 			tx.ConfirmedAt = time.Now().UTC()
 		}
 
-		// Publishing this confirmed tx
-		p.PublishRemoved(ctx, p.PubSub, tx)
+		// -- Safe writing, critical section begins
+		p.Lock.Lock()
 
 		// Remove from sorted tx list, keep it sorted
 		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
 		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
 
 		delete(p.Transactions, txStat.Hash)
+
+		p.Lock.Unlock()
+		// -- writing ends
+
+		// Publishing this confirmed/ dropped tx
+		p.PublishRemoved(ctx, p.PubSub, tx)
 
 		return true
 
@@ -84,10 +99,18 @@ func (p *PendingPool) Start(ctx context.Context) {
 			// This is what we're trying to add
 			tx := req.Tx
 
+			// -- Safe reading begins
+			p.Lock.RLock()
+
 			if _, ok := p.Transactions[tx.Hash]; ok {
 				req.ResponseChan <- false
+
+				p.Lock.RUnlock()
 				break
 			}
+
+			p.Lock.RUnlock()
+			// -- reading ends
 
 			// Marking we found this tx in mempool now
 			tx.PendingFrom = time.Now().UTC()
@@ -119,12 +142,12 @@ func (p *PendingPool) Start(ctx context.Context) {
 		case req := <-p.RemoveTxsChan:
 
 			if p.IsPruning {
-				req.ResponseChan <- false
+				req.ResponseChan <- PRUNING
 				break
 			}
 
 			if p.DescTxsByGasPrice.len() == 0 {
-				req.ResponseChan <- false
+				req.ResponseChan <- EMPTY
 				break
 			}
 
@@ -141,8 +164,8 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// for concurrently checking status of tx(s)
 				wp := workerpool.New(config.GetConcurrencyFactor())
 
-				// -- Critical section begins
-				p.Lock.Lock()
+				// -- Safe reading begins
+				p.Lock.RLock()
 
 				txs := p.DescTxsByGasPrice.get()
 				txCount := uint64(len(txs))
@@ -197,8 +220,8 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 				}
 
-				p.Lock.Unlock()
-				// -- ends here
+				p.Lock.RUnlock()
+				// -- reading ends here
 
 				buffer := make([]*TxStatus, 0, txCount)
 
@@ -219,7 +242,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 				}
 
-				// This call is irrelevant here, but still being made
+				// This call is irrelevant here, probably, but still being made
 				//
 				// Because all workers have exited, otherwise we could have never
 				// reached this point
@@ -240,13 +263,9 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// anymore
 				for i := 0; i < len(buffer); i++ {
 
-					p.Lock.Lock()
-
 					if txRemover(buffer[i]) {
 						count++
 					}
-
-					p.Lock.Unlock()
 
 				}
 
@@ -254,35 +273,66 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			}()
 
-			req.ResponseChan <- true
+			req.ResponseChan <- SCHEDULED
 
 		case req := <-p.TxExistsChan:
 
+			// -- Safe reading begins
+			p.Lock.RLock()
+
 			_, ok := p.Transactions[req.Tx]
+
+			p.Lock.RUnlock()
+			// -- ends
+
 			req.ResponseChan <- ok
 
 		case req := <-p.GetTxChan:
+
+			// -- Safe reading begins
+			p.Lock.RLock()
 
 			if tx, ok := p.Transactions[req.Tx]; ok {
 				req.ResponseChan <- tx
 				break
 			}
 
+			p.Lock.RUnlock()
+			// -- ends
+
 			req.ResponseChan <- nil
 
 		case req := <-p.CountTxsChan:
 
+			// -- Safe reading begins
+			p.Lock.RLock()
+
 			req.ResponseChan <- uint64(p.AscTxsByGasPrice.len())
+
+			p.Lock.RUnlock()
+			// -- ends
 
 		case req := <-p.ListTxsChan:
 
 			if req.Order == ASC {
+				// -- Safe reading begins
+				p.Lock.RLock()
+
 				req.ResponseChan <- p.AscTxsByGasPrice.get()
+
+				p.Lock.RUnlock()
+				// -- ends
 				break
 			}
 
 			if req.Order == DESC {
+				// -- Safe reading begins
+				p.Lock.RLock()
+
 				req.ResponseChan <- p.DescTxsByGasPrice.get()
+
+				p.Lock.RUnlock()
+				// -- ends
 			}
 
 		}
@@ -744,9 +794,9 @@ func (p *PendingPool) AddPendings(ctx context.Context, txs map[string]map[string
 
 // RemoveDroppedAndConfirmed - Given current tx list attempt to remove
 // txs which are dropped/ confirmed
-func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, txs map[string]map[string]*MemPoolTx) bool {
+func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, txs map[string]map[string]*MemPoolTx) int {
 
-	resp := make(chan bool)
+	resp := make(chan int)
 	p.RemoveTxsChan <- RemoveTxsFromPendingPool{Txs: txs, ResponseChan: resp}
 
 	return <-resp
