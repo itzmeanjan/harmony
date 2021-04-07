@@ -121,6 +121,8 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		Transactions:      make(map[common.Hash]*data.MemPoolTx),
 		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
 		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+		Lock:              &sync.RWMutex{},
+		IsPruning:         false,
 		AddTxChan:         make(chan data.AddRequest, 1),
 		RemoveTxChan:      make(chan data.RemovedUnstuckTx, 1),
 		RemoveTxsChan:     make(chan data.RemoveTxsFromQueuedPool, 1),
