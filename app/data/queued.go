@@ -231,10 +231,9 @@ func (q *QueuedPool) Start(ctx context.Context) {
 						unstuck++
 
 						// Pushing unstuck tx into pending pool
-						// because now it's eligible for it
-						if !q.PendingPool.Add(ctx, tx) {
-							log.Printf("[❗️] Failed to push unstuck tx into pending pool, already done\n")
-						}
+						// because now it's eligible for it, but it
+						// may be already present in pool
+						q.PendingPool.Add(ctx, tx)
 
 					}
 
