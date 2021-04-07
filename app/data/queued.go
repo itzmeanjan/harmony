@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 
@@ -407,7 +408,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
 	// Attempting to concurrently checking which txs are duplicate
 	// of a given tx hash
-	wp := workerpool.New(config.GetConcurrencyFactor())
+	wp := workerpool.New(runtime.NumCPU())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -502,7 +503,7 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
+	wp := workerpool.New(runtime.NumCPU())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -563,7 +564,7 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
+	wp := workerpool.New(runtime.NumCPU())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -624,7 +625,7 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
+	wp := workerpool.New(runtime.NumCPU())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -685,7 +686,7 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
+	wp := workerpool.New(runtime.NumCPU())
 
 	for i := 0; i < len(txs); i++ {
 
