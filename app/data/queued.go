@@ -209,20 +209,37 @@ func (q *QueuedPool) Start(ctx context.Context) {
 				q.Lock.RUnlock()
 				// -- reading ends here
 
-				buffer := make([]common.Hash, 0, txCount)
-
-				var received uint64
-				mustReceive := txCount
+				var (
+					received uint64
+					unstuck  uint64
+				)
 
 				// Waiting for all go routines to finish
 				for v := range commChan {
 
 					if v.Status == UNSTUCK {
-						buffer = append(buffer, v.Hash)
+
+						// Removing unstuck tx
+						tx := txRemover(v.Hash)
+						if tx == nil {
+
+							log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
+							continue
+
+						}
+
+						unstuck++
+
+						// Pushing unstuck tx into pending pool
+						// because now it's eligible for it
+						if !q.PendingPool.Add(ctx, tx) {
+							log.Printf("[❗️] Failed to push unstuck tx into pending pool, already done\n")
+						}
+
 					}
 
 					received++
-					if received >= mustReceive {
+					if received >= txCount {
 						break
 					}
 
@@ -234,48 +251,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 				// reached this point
 				wp.Stop()
 
-				// -- Done with safely reading to be removed tx(s)
-
-				// All queued tx(s) present in last iteration
-				// also present in now
-				//
-				// Nothing has changed, so we can't remove any older tx(s)
-				if len(buffer) == 0 {
-					return
-				}
-
-				var count uint64
-
-				// Iteratively removing entries which are
-				// not supposed to be present in queued mempool
-				// anymore
-				//
-				// And attempting to add them to pending pool
-				// if they're supposed to be added there
-				for i := 0; i < len(buffer); i++ {
-
-					// removing unstuck tx
-					tx := txRemover(buffer[i])
-					if tx == nil {
-
-						log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
-						continue
-
-					}
-
-					// updating count of removed unstuck tx(s) from
-					// queued pool
-					count++
-
-					// pushing unstuck tx into pending pool
-					// because now it's eligible for it
-					if !q.PendingPool.Add(ctx, tx) {
-						log.Printf("[❗️] Failed to push unstuck tx into pending pool\n")
-					}
-
-				}
-
-				log.Printf("[➖] Removed %d tx(s) from queued tx pool, in %s\n", count, time.Now().UTC().Sub(start))
+				log.Printf("[➖] Removed %d tx(s) from queued tx pool, in %s\n", unstuck, time.Now().UTC().Sub(start))
 
 			}()
 

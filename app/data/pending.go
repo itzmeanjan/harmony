@@ -223,20 +223,26 @@ func (p *PendingPool) Start(ctx context.Context) {
 				p.Lock.RUnlock()
 				// -- reading ends here
 
-				buffer := make([]*TxStatus, 0, txCount)
-
-				var received uint64
-				mustReceive := txCount
+				var (
+					received           uint64
+					droppedOrConfirmed uint64
+				)
 
 				// Waiting for all go routines to finish
 				for v := range commChan {
 
 					if v.Status == CONFIRMED || v.Status == DROPPED {
-						buffer = append(buffer, v)
+
+						// Keep pruning as soon as we determined it can be pruned, rather than wait
+						// for all to come & then doing it
+						if txRemover(v) {
+							droppedOrConfirmed++
+						}
+
 					}
 
 					received++
-					if received >= mustReceive {
+					if received >= txCount {
 						break
 					}
 
@@ -248,28 +254,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// reached this point
 				wp.Stop()
 
-				// All pending tx(s) present in last iteration
-				// also present in now
-				//
-				// Nothing has changed, so we can't remove any older tx(s)
-				if len(buffer) == 0 {
-					return
-				}
-
-				var count uint64
-
-				// Iteratively removing entries which are
-				// not supposed to be present in pending mempool
-				// anymore
-				for i := 0; i < len(buffer); i++ {
-
-					if txRemover(buffer[i]) {
-						count++
-					}
-
-				}
-
-				log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", count, time.Now().UTC().Sub(start))
+				log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", droppedOrConfirmed, time.Now().UTC().Sub(start))
 
 			}()
 
