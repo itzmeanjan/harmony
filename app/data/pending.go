@@ -305,6 +305,14 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// -- Safe reading begins
 				p.Lock.RLock()
 
+				// If empty, just return nil
+				if p.AscTxsByGasPrice.len() == 0 {
+					req.ResponseChan <- nil
+
+					p.Lock.RUnlock()
+					break
+				}
+
 				copied := make([]*MemPoolTx, p.AscTxsByGasPrice.len())
 				copy(copied, p.AscTxsByGasPrice.get())
 
@@ -318,6 +326,14 @@ func (p *PendingPool) Start(ctx context.Context) {
 			if req.Order == DESC {
 				// -- Safe reading begins
 				p.Lock.RLock()
+
+				// If empty, just return nil
+				if p.DescTxsByGasPrice.len() == 0 {
+					req.ResponseChan <- nil
+
+					p.Lock.RUnlock()
+					break
+				}
 
 				copied := make([]*MemPoolTx, p.DescTxsByGasPrice.len())
 				copy(copied, p.DescTxsByGasPrice.get())
@@ -384,14 +400,18 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		return nil
 	}
 
-	// Attempting to concurrently checking which txs are duplicate
-	// of a given tx hash
-	wp := workerpool.New(config.GetConcurrencyFactor())
-
 	txs := p.DescListTxs()
+	if txs == nil {
+		return nil
+	}
+
 	txCount := uint64(len(txs))
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
+
+	// Attempting to concurrently checking which txs are duplicate
+	// of a given tx hash
+	wp := workerpool.New(config.GetConcurrencyFactor())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -477,12 +497,16 @@ func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 // specified address
 func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
-
 	txs := p.DescListTxs()
+	if txs == nil {
+		return nil
+	}
+
 	txCount := uint64(len(txs))
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
+
+	wp := workerpool.New(config.GetConcurrencyFactor())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -534,12 +558,16 @@ func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
 // specified address
 func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
-
 	txs := p.DescListTxs()
+	if txs == nil {
+		return nil
+	}
+
 	txCount := uint64(len(txs))
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
+
+	wp := workerpool.New(config.GetConcurrencyFactor())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -591,12 +619,16 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 // living in mempool for more than or equals to `X` time unit
 func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
-
 	txs := p.DescListTxs()
+	if txs == nil {
+		return nil
+	}
+
 	txCount := uint64(len(txs))
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
+
+	wp := workerpool.New(config.GetConcurrencyFactor())
 
 	for i := 0; i < len(txs); i++ {
 
@@ -648,12 +680,16 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 // living in mempool for less than or equals to `X` time unit
 func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
-	wp := workerpool.New(config.GetConcurrencyFactor())
-
 	txs := p.DescListTxs()
+	if txs == nil {
+		return nil
+	}
+
 	txCount := uint64(len(txs))
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
+
+	wp := workerpool.New(config.GetConcurrencyFactor())
 
 	for i := 0; i < len(txs); i++ {
 
