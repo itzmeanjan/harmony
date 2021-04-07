@@ -145,12 +145,12 @@ func (m *MemPool) Process(ctx context.Context, pending map[string]map[string]*Me
 
 	switch m.Queued.RemoveUnstuck(ctx, pending, queued) {
 
-	case 0:
-		log.Printf("[❓] Nothing to prune yet\n")
-	case 1:
+	case EMPTY:
+		log.Printf("[❕] Nothing to prune in queued pool\n")
+	case PRUNING:
 		log.Printf("[❕] Queued pool pruning in progress\n")
-	case 2:
-		log.Printf("[✳︎] Scheduled queued pool pruning\n")
+	case SCHEDULED:
+		log.Printf("[🔅] Scheduled queued pool pruning\n")
 	default:
 		log.Printf("[❗️] Unhandled response code detected\n")
 
@@ -164,12 +164,12 @@ func (m *MemPool) Process(ctx context.Context, pending map[string]map[string]*Me
 
 	switch m.Pending.RemoveDroppedAndConfirmed(ctx, pending) {
 
-	case 0:
-		log.Printf("[❓] Nothing to prune yet\n")
-	case 1:
+	case EMPTY:
+		log.Printf("[❕] Nothing to prune in pending pool\n")
+	case PRUNING:
 		log.Printf("[❕] Pending pool pruning in progress\n")
-	case 2:
-		log.Printf("[✳︎] Scheduled pending pool pruning\n")
+	case SCHEDULED:
+		log.Printf("[🔅] Scheduled pending pool pruning\n")
 	default:
 		log.Printf("[❗️] Unhandled response code detected\n")
 
