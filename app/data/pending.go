@@ -255,8 +255,9 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 			if prunables == nil {
 				break
 			}
+			var expected uint64 = uint64(len(prunables))
 
-			for i := 0; i < len(prunables); i++ {
+			for i := 0; i < int(expected); i++ {
 
 				func(tx *MemPoolTx) {
 
@@ -281,11 +282,12 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 			}
 
 			var (
+				received           uint64
 				droppedOrConfirmed uint64
 				marked             uint64
 			)
 
-			// Waiting for all go routines to finish
+			// Waiting for all workers to finish
 			for v := range internalChan {
 
 				if v.Status == CONFIRMED || v.Status == DROPPED {
@@ -302,6 +304,11 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 						}
 					}
 
+				}
+
+				received++
+				if received >= expected {
+					break
 				}
 
 			}

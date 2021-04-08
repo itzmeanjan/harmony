@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph"
+	"github.com/itzmeanjan/harmony/app/listen"
 	"github.com/itzmeanjan/harmony/app/networking"
 )
 
@@ -138,11 +140,19 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		Queued:  queuedPool,
 	}
 
+	// Block head listener & pending pool pruner
+	// talks over this buffered channel
+	commChan := make(chan *listen.CaughtTx, 1024)
+
 	// Starting pool life cycle manager go routine
 	go pool.Pending.Start(ctx)
-	go pool.Pending.Prune(ctx)
+	// (a)
+	go pool.Pending.Prune(ctx, commChan)
 	go pool.Queued.Start(ctx)
 	go pool.Queued.Prune(ctx)
+	// Listens for new block headers & informs 👆 (a) for pruning
+	// txs which can be/ need to be
+	go listen.SubscribeHead(ctx, ethclient.NewClient(client), commChan)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
