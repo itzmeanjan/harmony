@@ -51,6 +51,14 @@ func (m *MemPoolTx) IsDuplicateOf(tx *MemPoolTx) bool {
 
 }
 
+// IsLowerNonce - Objective is to find out whether `m` has same
+// of lower nonce than `tx`
+func (m *MemPoolTx) IsLowerNonce(tx *MemPoolTx) bool {
+
+	return m.Hash != tx.Hash && m.From == tx.From && m.Nonce <= tx.Nonce
+
+}
+
 // IsSentFrom - Checks whether this tx was sent from specified address
 // or not
 func (m *MemPoolTx) IsSentFrom(address common.Address) bool {
