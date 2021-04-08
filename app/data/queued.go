@@ -326,6 +326,11 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 			// reached this point
 			wp.Stop()
 
+			// Only if non-zero number of txs are pruned, show them
+			if unstuck == 0 {
+				break
+			}
+
 			log.Printf("[➖] Removed %d tx(s) from queued tx pool, in %s\n", unstuck, time.Now().UTC().Sub(start))
 
 		}
