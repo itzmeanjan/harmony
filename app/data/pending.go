@@ -12,6 +12,7 @@ import (
 	"github.com/gammazero/workerpool"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
+	"github.com/itzmeanjan/harmony/app/listen"
 )
 
 // PendingPool - Currently present pending tx(s) i.e. which are ready to
@@ -232,7 +233,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 // Prune - Remove confirmed/ dropped txs from pending pool
 //
 // @note This method is supposed to be run as independent go routine
-func (p *PendingPool) Prune(ctx context.Context) {
+func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx) {
 
 	for {
 
@@ -240,6 +241,8 @@ func (p *PendingPool) Prune(ctx context.Context) {
 
 		case <-ctx.Done():
 			return
+
+		case <-commChan:
 
 		case <-time.After(time.Duration(100) * time.Millisecond):
 
@@ -375,6 +378,77 @@ func (p *PendingPool) Count() uint64 {
 	p.CountTxsChan <- CountRequest{ResponseChan: respChan}
 
 	return <-respChan
+
+}
+
+// Prunables - Given tx hash, with which a tx has been mined
+// we're attempting to find out all txs which are living in pending pool
+// now & having same sender address & same/ lower nonce, so that
+// pruner can update state while removing mined txs from mempool
+func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
+
+	targetTx := p.Get(hash)
+	if targetTx == nil {
+		return nil
+	}
+
+	txs := p.DescListTxs()
+	if txs == nil {
+		return nil
+	}
+
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
+	result = append(result, targetTx) // this is the tx which got mined
+
+	// Attempting to concurrently checking which txs are duplicate
+	// of a given tx hash
+	wp := workerpool.New(runtime.NumCPU())
+
+	for i := 0; i < len(txs); i++ {
+
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsLowerNonce(targetTx) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
+		}
+
+	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
+
+	return result
 
 }
 
