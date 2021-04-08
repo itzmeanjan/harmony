@@ -256,6 +256,7 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 				break
 			}
 			var expected uint64 = uint64(len(prunables))
+			var startTime time.Time = time.Now().UTC()
 
 			for i := 0; i < int(expected); i++ {
 
@@ -284,7 +285,6 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 			var (
 				received           uint64
 				droppedOrConfirmed uint64
-				marked             uint64
 			)
 
 			// Waiting for all workers to finish
@@ -296,12 +296,6 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 					// for all to come & then doing it
 					if p.Remove(ctx, v) {
 						droppedOrConfirmed++
-
-						if droppedOrConfirmed > marked && droppedOrConfirmed%10 == 0 {
-							log.Printf("[➖] Removed 10 tx(s) from pending tx pool\n")
-
-							marked = droppedOrConfirmed
-						}
 					}
 
 				}
@@ -312,6 +306,8 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 				}
 
 			}
+
+			log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", droppedOrConfirmed, time.Now().UTC().Sub(startTime))
 
 		}
 
