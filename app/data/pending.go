@@ -24,7 +24,6 @@ type PendingPool struct {
 	IsPruning         bool
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemoveRequest
-	RemoveTxsChan     chan RemoveTxsFromPendingPool
 	TxExistsChan      chan ExistsRequest
 	GetTxChan         chan GetRequest
 	CountTxsChan      chan CountRequest
@@ -140,127 +139,6 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			req.ResponseChan <- txRemover(req.TxStat)
 
-		case req := <-p.RemoveTxsChan:
-
-			if p.IsPruning {
-				req.ResponseChan <- PRUNING
-				break
-			}
-
-			if p.DescTxsByGasPrice.len() == 0 {
-				req.ResponseChan <- EMPTY
-				break
-			}
-
-			p.IsPruning = true
-			go func() {
-
-				defer func() {
-					p.IsPruning = false
-				}()
-
-				start := time.Now().UTC()
-
-				// Creating worker pool, where jobs to be submitted
-				// for concurrently checking status of tx(s)
-				wp := workerpool.New(config.GetConcurrencyFactor())
-
-				// -- Safe reading begins
-				p.Lock.RLock()
-
-				txs := p.DescTxsByGasPrice.get()
-				txCount := uint64(len(txs))
-				commChan := make(chan *TxStatus, txCount)
-
-				for i := 0; i < len(txs); i++ {
-
-					func(tx *MemPoolTx) {
-
-						wp.Submit(func() {
-
-							// If it's present in current pool, it's pending
-							if IsPresentInCurrentPool(req.Txs, tx.Hash) {
-
-								commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-								return
-
-							}
-
-							// Checking whether this nonce is used
-							// in any mined tx ( including this )
-							yes, err := tx.IsNonceExhausted(ctx, p.RPC)
-							if err != nil {
-
-								commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-								return
-
-							}
-
-							if !yes {
-
-								commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-								return
-
-							}
-
-							// Tx got confirmed/ dropped, to be used when computing
-							// how long it spent in pending pool
-							dropped, _ := tx.IsDropped(ctx, p.RPC)
-							if dropped {
-
-								commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
-								return
-
-							}
-
-							commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
-
-						})
-
-					}(txs[i])
-
-				}
-
-				p.Lock.RUnlock()
-				// -- reading ends here
-
-				var (
-					received           uint64
-					droppedOrConfirmed uint64
-				)
-
-				// Waiting for all go routines to finish
-				for v := range commChan {
-
-					if v.Status == CONFIRMED || v.Status == DROPPED {
-
-						// Keep pruning as soon as we determined it can be pruned, rather than wait
-						// for all to come & then doing it
-						if txRemover(v) {
-							droppedOrConfirmed++
-						}
-
-					}
-
-					received++
-					if received >= txCount {
-						break
-					}
-
-				}
-
-				// This call is irrelevant here, probably, but still being made
-				//
-				// Because all workers have exited, otherwise we could have never
-				// reached this point
-				wp.Stop()
-
-				log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", droppedOrConfirmed, time.Now().UTC().Sub(start))
-
-			}()
-
-			req.ResponseChan <- SCHEDULED
-
 		case req := <-p.TxExistsChan:
 
 			// -- Safe reading begins
@@ -344,6 +222,117 @@ func (p *PendingPool) Start(ctx context.Context) {
 				p.Lock.RUnlock()
 				// -- ends
 			}
+
+		}
+
+	}
+
+}
+
+// Prune - Remove confirmed/ dropped txs from pending pool
+//
+// @note This method is supposed to be run as independent go routine
+func (p *PendingPool) Prune(ctx context.Context) {
+
+	for {
+
+		select {
+
+		case <-ctx.Done():
+			return
+
+		case <-time.After(time.Duration(100) * time.Millisecond):
+
+			start := time.Now().UTC()
+
+			// Creating worker pool, where jobs to be submitted
+			// for concurrently checking status of tx(s)
+			wp := workerpool.New(config.GetConcurrencyFactor())
+
+			txs := p.DescListTxs()
+			if txs == nil {
+				break
+			}
+			txCount := uint64(len(txs))
+			commChan := make(chan *TxStatus, txCount)
+
+			for i := 0; i < len(txs); i++ {
+
+				func(tx *MemPoolTx) {
+
+					wp.Submit(func() {
+
+						// Checking whether this nonce is used
+						// in any mined tx ( including this )
+						yes, err := tx.IsNonceExhausted(ctx, p.RPC)
+						if err != nil {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+							return
+
+						}
+
+						if !yes {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
+							return
+
+						}
+
+						// Tx got confirmed/ dropped, to be used when computing
+						// how long it spent in pending pool
+						dropped, _ := tx.IsDropped(ctx, p.RPC)
+						if dropped {
+
+							commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
+							return
+
+						}
+
+						commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
+
+					})
+
+				}(txs[i])
+
+			}
+
+			var (
+				received           uint64
+				droppedOrConfirmed uint64
+			)
+
+			// Waiting for all go routines to finish
+			for v := range commChan {
+
+				if v.Status == CONFIRMED || v.Status == DROPPED {
+
+					// Keep pruning as soon as we determined it can be pruned, rather than wait
+					// for all to come & then doing it
+					if p.Remove(ctx, v) {
+						droppedOrConfirmed++
+
+						if droppedOrConfirmed%10 == 0 {
+							log.Printf("[➖] Removed 10 tx(s) from pending tx pool\n")
+						}
+					}
+
+				}
+
+				received++
+				if received >= txCount {
+					break
+				}
+
+			}
+
+			// This call is irrelevant here, probably, but still being made
+			//
+			// Because all workers have exited, otherwise we could have never
+			// reached this point
+			wp.Stop()
+
+			log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", droppedOrConfirmed, time.Now().UTC().Sub(start))
 
 		}
 
@@ -819,16 +808,5 @@ func (p *PendingPool) AddPendings(ctx context.Context, txs map[string]map[string
 	}
 
 	return count
-
-}
-
-// RemoveDroppedAndConfirmed - Given current tx list attempt to remove
-// txs which are dropped/ confirmed
-func (p *PendingPool) RemoveDroppedAndConfirmed(ctx context.Context, txs map[string]map[string]*MemPoolTx) int {
-
-	resp := make(chan int)
-	p.RemoveTxsChan <- RemoveTxsFromPendingPool{Txs: txs, ResponseChan: resp}
-
-	return <-resp
 
 }

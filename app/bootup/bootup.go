@@ -107,7 +107,6 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		IsPruning:         false,
 		AddTxChan:         make(chan data.AddRequest, 1),
 		RemoveTxChan:      make(chan data.RemoveRequest, 1),
-		RemoveTxsChan:     make(chan data.RemoveTxsFromPendingPool, 1),
 		TxExistsChan:      make(chan data.ExistsRequest, 1),
 		GetTxChan:         make(chan data.GetRequest, 1),
 		CountTxsChan:      make(chan data.CountRequest, 1),

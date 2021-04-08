@@ -162,19 +162,6 @@ func (m *MemPool) Process(ctx context.Context, pending map[string]map[string]*Me
 		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", addedQ, time.Now().UTC().Sub(start))
 	}
 
-	switch m.Pending.RemoveDroppedAndConfirmed(ctx, pending) {
-
-	case EMPTY:
-		log.Printf("[❕] Nothing to prune in pending pool\n")
-	case PRUNING:
-		log.Printf("[❕] Pending pool pruning in progress\n")
-	case SCHEDULED:
-		log.Printf("[🔅] Scheduled pending pool pruning\n")
-	default:
-		log.Printf("[❗️] Unhandled response code detected\n")
-
-	}
-
 	start = time.Now().UTC()
 
 	if addedP := m.Pending.AddPendings(ctx, pending); addedP != 0 {
