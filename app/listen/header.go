@@ -33,6 +33,7 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 		select {
 
 		case <-ctx.Done():
+			subs.Unsubscribe()
 			return
 
 		case err := <-subs.Err():
@@ -46,6 +47,8 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 				log.Printf("[!] Failed to fetch block : %d\n", header.Number.Uint64())
 				break
 			}
+
+			log.Printf("🧱 Block %d mined with %d tx(s)\n", header.Number.Uint64(), len(block.Transactions()))
 
 			for _, tx := range block.Transactions() {
 

@@ -45,7 +45,11 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	}
 
 	client, err := rpc.DialContext(ctx, config.Get("RPCUrl"))
+	if err != nil {
+		return nil, err
+	}
 
+	wsClient, err := ethclient.DialContext(ctx, config.Get("WSUrl"))
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +156,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	go pool.Queued.Prune(ctx)
 	// Listens for new block headers & informs 👆 (a) for pruning
 	// txs which can be/ need to be
-	go listen.SubscribeHead(ctx, ethclient.NewClient(client), commChan)
+	go listen.SubscribeHead(ctx, wsClient, commChan)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
