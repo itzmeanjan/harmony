@@ -175,6 +175,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	return &data.Resource{
 		RPCClient: client,
+		WSClient:  wsClient,
 		Pool:      pool,
 		Redis:     _redis,
 		StartedAt: time.Now().UTC(),
