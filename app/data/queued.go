@@ -281,6 +281,7 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 			var (
 				received uint64
 				unstuck  uint64
+				marked   uint64
 			)
 
 			// Waiting for all go routines to finish
@@ -304,8 +305,10 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 					// may be already present in pool
 					q.PendingPool.Add(ctx, tx)
 
-					if unstuck%10 == 0 {
+					if unstuck > marked && unstuck%10 == 0 {
 						log.Printf("[➖] Removed 10 tx(s) from queued tx pool\n")
+
+						marked = unstuck
 					}
 
 				}

@@ -300,6 +300,7 @@ func (p *PendingPool) Prune(ctx context.Context) {
 			var (
 				received           uint64
 				droppedOrConfirmed uint64
+				marked             uint64
 			)
 
 			// Waiting for all go routines to finish
@@ -312,8 +313,10 @@ func (p *PendingPool) Prune(ctx context.Context) {
 					if p.Remove(ctx, v) {
 						droppedOrConfirmed++
 
-						if droppedOrConfirmed%10 == 0 {
+						if droppedOrConfirmed > marked && droppedOrConfirmed%10 == 0 {
 							log.Printf("[➖] Removed 10 tx(s) from pending tx pool\n")
+
+							marked = droppedOrConfirmed
 						}
 					}
 
