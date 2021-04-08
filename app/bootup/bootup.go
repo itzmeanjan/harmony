@@ -124,7 +124,6 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		IsPruning:         false,
 		AddTxChan:         make(chan data.AddRequest, 1),
 		RemoveTxChan:      make(chan data.RemovedUnstuckTx, 1),
-		RemoveTxsChan:     make(chan data.RemoveTxsFromQueuedPool, 1),
 		TxExistsChan:      make(chan data.ExistsRequest, 1),
 		GetTxChan:         make(chan data.GetRequest, 1),
 		CountTxsChan:      make(chan data.CountRequest, 1),
@@ -141,7 +140,9 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	// Starting pool life cycle manager go routine
 	go pool.Pending.Start(ctx)
+	go pool.Pending.Prune(ctx)
 	go pool.Queued.Start(ctx)
+	go pool.Queued.Prune(ctx)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {

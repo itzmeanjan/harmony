@@ -28,7 +28,6 @@ type QueuedPool struct {
 	IsPruning         bool
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemovedUnstuckTx
-	RemoveTxsChan     chan RemoveTxsFromQueuedPool
 	TxExistsChan      chan ExistsRequest
 	GetTxChan         chan GetRequest
 	CountTxsChan      chan CountRequest
@@ -132,29 +131,6 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 			// if removed will return non-nil reference to removed tx
 			req.ResponseChan <- txRemover(req.Hash)
-
-		case req := <-q.RemoveTxsChan:
-
-			if q.IsPruning {
-				req.ResponseChan <- PRUNING
-				break
-			}
-
-			if q.DescTxsByGasPrice.len() == 0 {
-				req.ResponseChan <- EMPTY
-				break
-			}
-
-			q.IsPruning = true
-			go func() {
-
-				defer func() {
-					q.IsPruning = false
-				}()
-
-			}()
-
-			req.ResponseChan <- SCHEDULED
 
 		case req := <-q.TxExistsChan:
 
@@ -824,16 +800,5 @@ func (q *QueuedPool) AddQueued(ctx context.Context, txs map[string]map[string]*M
 	}
 
 	return count
-
-}
-
-// RemoveUnstuck - Given current tx list attempt to remove
-// txs which are dropped/ confirmed
-func (q *QueuedPool) RemoveUnstuck(ctx context.Context, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) int {
-
-	resp := make(chan int)
-	q.RemoveTxsChan <- RemoveTxsFromQueuedPool{Pending: pending, Queued: queued, ResponseChan: resp}
-
-	return <-resp
 
 }
