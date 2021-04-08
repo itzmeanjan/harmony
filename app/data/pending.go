@@ -235,6 +235,13 @@ func (p *PendingPool) Start(ctx context.Context) {
 // @note This method is supposed to be run as independent go routine
 func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx) {
 
+	// Creating worker pool, where jobs to be submitted
+	// for concurrently checking whether tx was dropped or not
+	wp := workerpool.New(runtime.NumCPU())
+	defer wp.Stop()
+
+	internalChan := make(chan *TxStatus, 1024)
+
 	for {
 
 		select {
@@ -242,72 +249,44 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 		case <-ctx.Done():
 			return
 
-		case <-commChan:
+		case tx := <-commChan:
 
-		case <-time.After(time.Duration(100) * time.Millisecond):
-
-			start := time.Now().UTC()
-
-			// Creating worker pool, where jobs to be submitted
-			// for concurrently checking status of tx(s)
-			wp := workerpool.New(config.GetConcurrencyFactor())
-
-			txs := p.DescListTxs()
-			if txs == nil {
+			prunables := p.Prunables(tx.Hash)
+			if prunables == nil {
 				break
 			}
-			txCount := uint64(len(txs))
-			commChan := make(chan *TxStatus, txCount)
 
-			for i := 0; i < len(txs); i++ {
+			for i := 0; i < len(prunables); i++ {
 
 				func(tx *MemPoolTx) {
 
 					wp.Submit(func() {
-
-						// Checking whether this nonce is used
-						// in any mined tx ( including this )
-						yes, err := tx.IsNonceExhausted(ctx, p.RPC)
-						if err != nil {
-
-							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-							return
-
-						}
-
-						if !yes {
-
-							commChan <- &TxStatus{Hash: tx.Hash, Status: PENDING}
-							return
-
-						}
 
 						// Tx got confirmed/ dropped, to be used when computing
 						// how long it spent in pending pool
 						dropped, _ := tx.IsDropped(ctx, p.RPC)
 						if dropped {
 
-							commChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
 							return
 
 						}
 
-						commChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
+						internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
 
 					})
 
-				}(txs[i])
+				}(prunables[i])
 
 			}
 
 			var (
-				received           uint64
 				droppedOrConfirmed uint64
 				marked             uint64
 			)
 
 			// Waiting for all go routines to finish
-			for v := range commChan {
+			for v := range internalChan {
 
 				if v.Status == CONFIRMED || v.Status == DROPPED {
 
@@ -325,20 +304,7 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 
 				}
 
-				received++
-				if received >= txCount {
-					break
-				}
-
 			}
-
-			// This call is irrelevant here, probably, but still being made
-			//
-			// Because all workers have exited, otherwise we could have never
-			// reached this point
-			wp.Stop()
-
-			log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", droppedOrConfirmed, time.Now().UTC().Sub(start))
 
 		}
 
@@ -400,7 +366,8 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 	txCount := uint64(len(txs))
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
-	result = append(result, targetTx) // this is the tx which got mined
+	// This is the tx which got mined
+	result = append(result, targetTx)
 
 	// Attempting to concurrently checking which txs are duplicate
 	// of a given tx hash
