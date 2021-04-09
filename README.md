@@ -100,6 +100,7 @@ touch .env
 
 ```bash
 RPCUrl=https://<rpc-node>
+WSUrl=wss://<rpc-node>
 MemPoolPollingPeriod=1000
 PendingTxEntryTopic=pending_pool_entry
 PendingTxExitTopic=pending_pool_exit
@@ -116,6 +117,7 @@ Port=7000
 Environment Variable | Interpretation
 --- | ---
 RPCUrl | `txpool` RPC API enabled Ethereum Node's URI
+WSUrl | To be used for listening to newly mined block headers
 MemPoolPollingPeriod | RPC node's mempool to be checked every `X` milliseconds
 PendingTxEntryTopic | Whenever tx enters pending pool, it'll be published on Redis topic `t`
 PendingTxExitTopic | Whenever tx leaves pending pool, it'll be published on Redis topic `t`
