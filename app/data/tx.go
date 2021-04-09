@@ -284,6 +284,16 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 		}
 
+	default:
+		// handle situation when deserilisation didn't work
+		// properly
+		break
+
+	}
+
+	// In that case, simply return
+	if gqlTx == nil {
+		return nil
 	}
 
 	if m.To != nil {
