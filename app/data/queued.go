@@ -228,6 +228,15 @@ func (q *QueuedPool) Start(ctx context.Context) {
 // @note Start this method as an independent go routine
 func (q *QueuedPool) Prune(ctx context.Context) {
 
+	// Creating worker pool, where jobs to be submitted
+	// for concurrently checking whether tx has been unstuck or not
+	// so that it can be moved to pending pool
+	wp := workerpool.New(config.GetConcurrencyFactor())
+	defer wp.Stop()
+
+	internalChan := make(chan *TxStatus, 1024)
+	var unstuck uint64
+
 	for {
 
 		select {
@@ -235,13 +244,7 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
-		case <-time.After(time.Duration(100) * time.Millisecond):
-
-			start := time.Now().UTC()
-
-			// Creating worker pool, where jobs to be submitted
-			// for concurrently checking status of tx(s)
-			wp := workerpool.New(config.GetConcurrencyFactor())
+		case <-time.After(time.Duration(500) * time.Millisecond):
 
 			txs := q.DescListTxs()
 			if txs == nil {
@@ -278,59 +281,29 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 
 			}
 
-			var (
-				received uint64
-				unstuck  uint64
-				marked   uint64
-			)
+		case txStat := <-internalChan:
 
-			// Waiting for all go routines to finish
-			for v := range commChan {
+			if txStat.Status == UNSTUCK {
 
-				if v.Status == UNSTUCK {
-
-					// Removing unstuck tx
-					tx := q.Remove(ctx, v.Hash)
-					if tx == nil {
-
-						log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
-						continue
-
-					}
-
-					unstuck++
-
-					// Just check whether we need to add this tx into pending
-					// pool first, if not required, we're not adding it
-					q.PendingPool.VerifiedAdd(ctx, tx)
-
-					if unstuck > marked && unstuck%10 == 0 {
-						log.Printf("[➖] Removed 10 tx(s) from queued tx pool\n")
-
-						marked = unstuck
-					}
-
+				// Removing unstuck tx
+				tx := q.Remove(ctx, txStat.Hash)
+				if tx == nil {
+					// probably just been removed by some competing worker
+					// because it became eligible for that
+					continue
 				}
 
-				received++
-				if received >= txCount {
-					break
+				unstuck++
+
+				// Just check whether we need to add this tx into pending
+				// pool first, if not required, we're not adding it
+				q.PendingPool.VerifiedAdd(ctx, tx)
+
+				if unstuck%10 == 0 {
+					log.Printf("[➖] Removed 10 tx(s) from queued tx pool\n")
 				}
 
 			}
-
-			// This call is irrelevant here, but still being made
-			//
-			// Because all workers have exited, otherwise we could have never
-			// reached this point
-			wp.Stop()
-
-			// Only if non-zero number of txs are pruned, show them
-			if unstuck == 0 {
-				break
-			}
-
-			log.Printf("[➖] Removed %d tx(s) from queued tx pool, in %s\n", unstuck, time.Now().UTC().Sub(start))
 
 		}
 
