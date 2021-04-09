@@ -16,10 +16,14 @@ type CaughtTx struct {
 	Nonce uint64
 }
 
+// CaughtTxs - Just a slice of txs, which we found to be present in a recently
+// mined block
+type CaughtTxs []*CaughtTx
+
 // SubscribeHead - Subscribe to block headers & as soon as new block gets mined
 // its txs are picked up & published on a go channel, which will be listened
 // to by pending pool watcher, so that it can prune its state
-func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan *CaughtTx) {
+func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan CaughtTxs) {
 
 	headerChan := make(chan *types.Header, 1)
 	subs, err := client.SubscribeNewHead(ctx, headerChan)
@@ -48,18 +52,26 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 				break
 			}
 
-			log.Printf("🧱 Block %d mined with %d tx(s)\n", header.Number.Uint64(), len(block.Transactions()))
+			txCount := len(block.Transactions())
+			log.Printf("🧱 Block %d mined with %d tx(s)\n", header.Number.Uint64(), txCount)
+
+			// We've nothing to share with pruning worker
+			if txCount == 0 {
+				break
+			}
+
+			txs := make([]*CaughtTx, 0, txCount)
 
 			for _, tx := range block.Transactions() {
 
-				// Hopefully pending pool watcher will read this
-				// & prune its state
-				commChan <- &CaughtTx{
+				txs = append(txs, &CaughtTx{
 					Hash:  tx.Hash(),
 					Nonce: tx.Nonce(),
-				}
+				})
 
 			}
+
+			commChan <- txs
 
 		}
 
