@@ -250,8 +250,6 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 			if txs == nil {
 				break
 			}
-			txCount := uint64(len(txs))
-			commChan := make(chan *TxStatus, txCount)
 
 			for i := 0; i < len(txs); i++ {
 
@@ -264,15 +262,15 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 						yes, err := tx.IsUnstuck(ctx, q.RPC)
 						if err != nil {
 
-							commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
 							return
 
 						}
 
 						if yes {
-							commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
 						} else {
-							commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
 						}
 
 					})
