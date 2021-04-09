@@ -5,6 +5,7 @@ import (
 	"log"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -233,7 +234,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 // Prune - Remove confirmed/ dropped txs from pending pool
 //
 // @note This method is supposed to be run as independent go routine
-func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx) {
+func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs) {
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking whether tx was dropped or not
@@ -249,36 +250,52 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan *listen.CaughtTx)
 		case <-ctx.Done():
 			return
 
-		case tx := <-commChan:
+		case txs := <-commChan:
 
-			prunables := p.Prunables(tx.Hash)
-			if prunables == nil {
-				break
-			}
-			var expected uint64 = uint64(len(prunables))
 			var startTime time.Time = time.Now().UTC()
+			var expected uint64
 
-			for i := 0; i < int(expected); i++ {
+			for i := 0; i < len(txs); i++ {
 
-				func(tx *MemPoolTx) {
+				func(tx *listen.CaughtTx) {
 
 					wp.Submit(func() {
 
-						// Tx got confirmed/ dropped, to be used when computing
-						// how long it spent in pending pool
-						dropped, _ := tx.IsDropped(ctx, p.RPC)
-						if dropped {
-
-							internalChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
+						prunables := p.Prunables(tx.Hash)
+						if prunables == nil {
 							return
+						}
+
+						// Atomic increment, concurrent-safe [ expecting to behave well on all platforms ]
+						atomic.AddUint64(&expected, uint64(len(prunables)))
+
+						for i := 0; i < len(prunables); i++ {
+
+							func(tx *MemPoolTx) {
+
+								wp.Submit(func() {
+
+									// Tx got confirmed/ dropped, to be used when computing
+									// how long it spent in pending pool
+									dropped, _ := tx.IsDropped(ctx, p.RPC)
+									if dropped {
+
+										internalChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
+										return
+
+									}
+
+									internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
+
+								})
+
+							}(prunables[i])
 
 						}
 
-						internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
-
 					})
 
-				}(prunables[i])
+				}(txs[i])
 
 			}
 
