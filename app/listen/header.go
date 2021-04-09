@@ -3,6 +3,8 @@ package listen
 import (
 	"context"
 	"log"
+	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -25,7 +27,8 @@ type CaughtTxs []*CaughtTx
 // to by pending pool watcher, so that it can prune its state
 func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan CaughtTxs) {
 
-	headerChan := make(chan *types.Header, 1)
+	retryTable := make(map[*big.Int]bool)
+	headerChan := make(chan *types.Header, 64)
 	subs, err := client.SubscribeNewHead(ctx, headerChan)
 	if err != nil {
 		log.Printf("❗️ Failed to subscribe to block headers : %s\n", err.Error())
@@ -46,35 +49,80 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 
 		case header := <-headerChan:
 
-			block, err := client.BlockByHash(ctx, header.Hash())
-			if err != nil {
-				log.Printf("❗️ Failed to fetch block : %d\n", header.Number.Uint64())
+			if !ProcessBlock(ctx, client, header.Number, commChan) {
+
+				// Put entry in table that we failed to fetch this block, to be
+				// attempted in some time future
+				retryTable[header.Number] = true
+
+			}
+
+		case <-time.After(time.Duration(1) * time.Millisecond):
+
+			pendingC := len(retryTable)
+			if pendingC == 0 {
 				break
 			}
 
-			txCount := len(block.Transactions())
-			log.Printf("🧱 Block %d mined with %d tx(s)\n", header.Number.Uint64(), txCount)
+			log.Printf("🔁 Retrying %d block(s)\n", pendingC)
 
-			// We've nothing to share with pruning worker
-			if txCount == 0 {
+			success := make([]*big.Int, 0, pendingC)
+			for num := range retryTable {
+
+				if ProcessBlock(ctx, client, num, commChan) {
+					success = append(success, num)
+				}
+
+			}
+
+			successC := len(success)
+			if successC == 0 {
 				break
 			}
 
-			txs := make([]*CaughtTx, 0, txCount)
-
-			for _, tx := range block.Transactions() {
-
-				txs = append(txs, &CaughtTx{
-					Hash:  tx.Hash(),
-					Nonce: tx.Nonce(),
-				})
-
+			for i := 0; i < len(success); i++ {
+				delete(retryTable, success[i])
 			}
 
-			commChan <- txs
+			log.Printf("🎉 Processed %d pending block(s)\n", successC)
 
 		}
 
 	}
+
+}
+
+// ProcessBlock - Fetches all txs present in mined block & passes those to pending pool pruning worker
+func ProcessBlock(ctx context.Context, client *ethclient.Client, number *big.Int, commChan chan CaughtTxs) bool {
+
+	block, err := client.BlockByNumber(ctx, number)
+	if err != nil {
+
+		log.Printf("❗️ Failed to fetch block : %d\n", number)
+		return false
+
+	}
+
+	txCount := len(block.Transactions())
+	log.Printf("🧱 Block %d mined with %d tx(s)\n", number, txCount)
+
+	// We've nothing to share with pruning worker
+	if txCount == 0 {
+		return true
+	}
+
+	txs := make([]*CaughtTx, 0, txCount)
+
+	for _, tx := range block.Transactions() {
+
+		txs = append(txs, &CaughtTx{
+			Hash:  tx.Hash(),
+			Nonce: tx.Nonce(),
+		})
+
+	}
+
+	commChan <- txs
+	return true
 
 }
