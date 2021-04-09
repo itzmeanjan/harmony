@@ -238,10 +238,11 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking whether tx was dropped or not
-	wp := workerpool.New(runtime.NumCPU())
+	wp := workerpool.New(config.GetConcurrencyFactor())
 	defer wp.Stop()
 
 	internalChan := make(chan *TxStatus, 1024)
+	var droppedOrConfirmed uint64
 
 	for {
 
@@ -252,7 +253,6 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 
 		case txs := <-commChan:
 
-			var startTime time.Time = time.Now().UTC()
 			var expected uint64
 
 			for i := 0; i < len(txs); i++ {
@@ -299,32 +299,21 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 
 			}
 
-			var (
-				received           uint64
-				droppedOrConfirmed uint64
-			)
+		case tx := <-internalChan:
 
-			// Waiting for all workers to finish
-			for v := range internalChan {
+			if tx.Status == CONFIRMED || tx.Status == DROPPED {
 
-				if v.Status == CONFIRMED || v.Status == DROPPED {
+				// Keep pruning as soon as we determined it can be pruned, rather than wait
+				// for all to come & then doing it
+				if p.Remove(ctx, tx) {
+					droppedOrConfirmed++
 
-					// Keep pruning as soon as we determined it can be pruned, rather than wait
-					// for all to come & then doing it
-					if p.Remove(ctx, v) {
-						droppedOrConfirmed++
+					if droppedOrConfirmed%10 == 0 {
+						log.Printf("[➖] Removed 10 tx(s) from pending tx pool\n")
 					}
-
-				}
-
-				received++
-				if received >= expected {
-					break
 				}
 
 			}
-
-			log.Printf("[➖] Removed %d tx(s) from pending tx pool, in %s\n", droppedOrConfirmed, time.Now().UTC().Sub(startTime))
 
 		}
 
