@@ -28,7 +28,7 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 	headerChan := make(chan *types.Header, 1)
 	subs, err := client.SubscribeNewHead(ctx, headerChan)
 	if err != nil {
-		log.Printf("[!] Failed to subscribe to block headers : %s\n", err.Error())
+		log.Printf("❗️ Failed to subscribe to block headers : %s\n", err.Error())
 		return
 	}
 
@@ -41,14 +41,14 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 			return
 
 		case err := <-subs.Err():
-			log.Printf("[!] Block header subscription failed : %s\n", err.Error())
+			log.Printf("❗️ Block header subscription failed : %s\n", err.Error())
 			return
 
 		case header := <-headerChan:
 
-			block, err := client.BlockByNumber(ctx, header.Number)
+			block, err := client.BlockByHash(ctx, header.Hash())
 			if err != nil {
-				log.Printf("[!] Failed to fetch block : %d\n", header.Number.Uint64())
+				log.Printf("❗️ Failed to fetch block : %d\n", header.Number.Uint64())
 				break
 			}
 
