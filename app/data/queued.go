@@ -300,10 +300,9 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 
 					unstuck++
 
-					// Pushing unstuck tx into pending pool
-					// because now it's eligible for it, but it
-					// may be already present in pool
-					q.PendingPool.Add(ctx, tx)
+					// Just check whether we need to add this tx into pending
+					// pool first, if not required, we're not adding it
+					q.PendingPool.VerifiedAdd(ctx, tx)
 
 					if unstuck > marked && unstuck%10 == 0 {
 						log.Printf("[➖] Removed 10 tx(s) from queued tx pool\n")

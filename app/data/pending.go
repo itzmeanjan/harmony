@@ -806,6 +806,24 @@ func (p *PendingPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
 }
 
+// VerifiedAdd - Before adding tx from queued pool, just check do we
+// really need to add this tx in pending pool i.e. is this tx really
+// pending ?
+func (p *PendingPool) VerifiedAdd(ctx context.Context, tx *MemPoolTx) bool {
+
+	ok, err := tx.IsNonceExhausted(ctx, p.RPC)
+	if err != nil {
+		return false
+	}
+
+	if ok {
+		return false
+	}
+
+	return p.Add(ctx, tx)
+
+}
+
 // PublishAdded - Publish new pending tx pool content ( in messagepack serialized format )
 // to pubsub topic
 func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
