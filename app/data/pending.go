@@ -89,6 +89,56 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 	}
 
+	// Closure for checking whether adding new tx triggers
+	// condition for dropping some other tx
+	//
+	// Selecting which tx to be dropped
+	//
+	// - Tx with lowest gas price paid ✅
+	// - Oldest tx living in mempool ❌
+	// - Oldest tx with lowest gas price paid ❌
+	//
+	// ✅ : Implemented
+	// ❌ : Not yet
+	needToDropTxs := func() bool {
+
+		p.Lock.RLock()
+		defer p.Lock.RUnlock()
+
+		return uint64(p.AscTxsByGasPrice.len())+1 > config.GetPendingPoolSize()
+
+	}
+
+	pickTxWithLowestGasPrice := func() *MemPoolTx {
+
+		p.Lock.RLock()
+		defer p.Lock.RUnlock()
+
+		return p.AscTxsByGasPrice.get()[0]
+
+	}
+
+	// Silently drop some tx, before adding
+	// new one, so that we don't exceed limit
+	// set up by user
+	dropTx := func() {
+
+		// because this is the only scheme currently
+		// supported
+		tx := pickTxWithLowestGasPrice()
+
+		// -- Safe writing, critical section begins
+		p.Lock.Lock()
+		defer p.Lock.Unlock()
+
+		// Remove from sorted tx list, keep it sorted
+		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
+		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
+
+		delete(p.Transactions, tx.Hash)
+
+	}
+
 	for {
 
 		select {
