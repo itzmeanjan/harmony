@@ -20,6 +20,7 @@ import (
 // be mined in next block
 type PendingPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
+	DroppedTxs        map[common.Hash]bool
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
@@ -95,13 +96,13 @@ func (p *PendingPool) Start(ctx context.Context) {
 	// Selecting which tx to be dropped
 	//
 	// - Tx with lowest gas price paid ✅
-	// - Don't accept new tx if it's paying lesser
-	// gas price than current lowest in pool ✅
 	// - Oldest tx living in mempool ❌
 	// - Oldest tx with lowest gas price paid ❌
 	//
 	// ✅ : Implemented
 	// ❌ : Not yet
+	//
+	// @note Don't accept tx which are already dropped
 	needToDropTxs := func() bool {
 
 		p.Lock.RLock()
@@ -120,32 +121,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 	}
 
-	// If we see gas price being offered for new tx is
-	// lower than what's already lowest gas price
-	// being offered in pool, we're not going to accept
-	// this tx
-	//
-	// @note This function is going to be invoked only when we see
-	// we're going to hit limit set by user on how much resource
-	// to consume at max
-	isGasPriceLowerThanExpected := func(tx *MemPoolTx) bool {
-
-		p.Lock.RLock()
-		defer p.Lock.RUnlock()
-
-		currentLowest := p.AscTxsByGasPrice.get()[0]
-		return BigHexToBigDecimal(tx.GasPrice).Cmp(BigHexToBigDecimal(currentLowest.GasPrice)) <= 0
-
-	}
-
 	// Silently drop some tx, before adding
 	// new one, so that we don't exceed limit
 	// set up by user
-	dropTx := func() {
-
-		// because this is the only scheme currently
-		// supported
-		tx := pickTxWithLowestGasPrice()
+	dropTx := func(tx *MemPoolTx) {
 
 		// -- Safe writing, critical section begins
 		p.Lock.Lock()
@@ -154,8 +133,9 @@ func (p *PendingPool) Start(ctx context.Context) {
 		// Remove from sorted tx list, keep it sorted
 		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
 		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
-
 		delete(p.Transactions, tx.Hash)
+
+		p.DroppedTxs[tx.Hash] = true
 
 	}
 
@@ -181,16 +161,18 @@ func (p *PendingPool) Start(ctx context.Context) {
 				break
 			}
 
+			if _, ok := p.DroppedTxs[tx.Hash]; ok {
+				req.ResponseChan <- false
+
+				p.Lock.RUnlock()
+				break
+			}
+
 			p.Lock.RUnlock()
 			// -- reading ends
 
 			if needToDropTxs() {
-				if isGasPriceLowerThanExpected(tx) {
-					log.Printf("🧹 Didn't accept new pending tx, was about to hit limit\n")
-					break
-				}
-
-				dropTx()
+				dropTx(pickTxWithLowestGasPrice())
 				log.Printf("🧹 Dropped pending tx, was about to hit limit\n")
 			}
 

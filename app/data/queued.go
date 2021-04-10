@@ -22,6 +22,7 @@ import (
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
+	DroppedTxs        map[common.Hash]bool
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
@@ -91,6 +92,8 @@ func (q *QueuedPool) Start(ctx context.Context) {
 	//
 	// ✅ : Implemented
 	// ❌ : Not yet
+	//
+	// @note Don't accept tx which are already dropped
 	needToDropTxs := func() bool {
 
 		q.Lock.RLock()
@@ -109,32 +112,10 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 	}
 
-	// If we see gas price being offered for new tx is
-	// lower than what's already lowest gas price
-	// being offered in pool, we're not going to accept
-	// this tx
-	//
-	// @note This function is going to be invoked only when we see
-	// we're going to hit limit set by user on how much resource
-	// to consume at max
-	isGasPriceLowerThanExpected := func(tx *MemPoolTx) bool {
-
-		q.Lock.RLock()
-		defer q.Lock.RUnlock()
-
-		currentLowest := q.AscTxsByGasPrice.get()[0]
-		return BigHexToBigDecimal(tx.GasPrice).Cmp(BigHexToBigDecimal(currentLowest.GasPrice)) <= 0
-
-	}
-
 	// Silently drop some tx, before adding
 	// new one, so that we don't exceed limit
 	// set up by user
-	dropTx := func() {
-
-		// because this is the only scheme currently
-		// supported
-		tx := pickTxWithLowestGasPrice()
+	dropTx := func(tx *MemPoolTx) {
 
 		// -- Safe writing, critical section begins
 		q.Lock.Lock()
@@ -145,6 +126,8 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
 
 		delete(q.Transactions, tx.Hash)
+
+		q.DroppedTxs[tx.Hash] = true
 
 	}
 
@@ -169,16 +152,18 @@ func (q *QueuedPool) Start(ctx context.Context) {
 				break
 			}
 
+			if _, ok := q.DroppedTxs[tx.Hash]; ok {
+				req.ResponseChan <- false
+
+				q.Lock.RUnlock()
+				break
+			}
+
 			q.Lock.RUnlock()
 			// -- ends here
 
 			if needToDropTxs() {
-				if isGasPriceLowerThanExpected(tx) {
-					log.Printf("🧹 Didn't accept new queued tx, was about to hit limit\n")
-					break
-				}
-
-				dropTx()
+				dropTx(pickTxWithLowestGasPrice())
 				log.Printf("🧹 Dropped queued tx, was about to hit limit\n")
 			}
 
