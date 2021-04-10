@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 
@@ -24,6 +25,288 @@ type QueuedPool struct {
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
+	IsPruning         bool
+	AddTxChan         chan AddRequest
+	RemoveTxChan      chan RemovedUnstuckTx
+	TxExistsChan      chan ExistsRequest
+	GetTxChan         chan GetRequest
+	CountTxsChan      chan CountRequest
+	ListTxsChan       chan ListRequest
+	PubSub            *redis.Client
+	RPC               *rpc.Client
+	PendingPool       *PendingPool
+}
+
+// Start - This method is supposed to be started as a
+// seperate go routine which will manage queued pool ops
+// through out its life
+func (q *QueuedPool) Start(ctx context.Context) {
+
+	txRemover := func(txHash common.Hash) *MemPoolTx {
+
+		// -- Safely reading from map, begins
+		q.Lock.RLock()
+
+		tx, ok := q.Transactions[txHash]
+		if !ok {
+
+			q.Lock.RUnlock()
+			return nil
+
+		}
+
+		q.Lock.RUnlock()
+		// -- reading ends
+
+		tx.UnstuckAt = time.Now().UTC()
+
+		// -- Safe writing begins, critical section
+		q.Lock.Lock()
+
+		// Remove from sorted tx list, keep it sorted
+		q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
+		q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
+
+		delete(q.Transactions, txHash)
+
+		q.Lock.Unlock()
+		// -- ends
+
+		// Publishing unstuck tx, this is probably going to
+		// enter pending pool now
+		q.PublishRemoved(ctx, q.PubSub, q.Transactions[txHash])
+
+		return tx
+
+	}
+
+	for {
+
+		select {
+
+		case <-ctx.Done():
+			return
+		case req := <-q.AddTxChan:
+
+			// This is what we're trying to add
+			tx := req.Tx
+
+			// -- Safe reading begins
+			q.Lock.RLock()
+
+			if _, ok := q.Transactions[tx.Hash]; ok {
+				req.ResponseChan <- false
+
+				q.Lock.RUnlock()
+				break
+			}
+
+			q.Lock.RUnlock()
+			// -- ends here
+
+			// Marking we found this tx in mempool now
+			tx.QueuedAt = time.Now().UTC()
+			tx.Pool = "queued"
+
+			// -- Critical section begins
+			q.Lock.Lock()
+
+			// Creating entry
+			q.Transactions[tx.Hash] = tx
+
+			// Insert into sorted pending tx list, keep sorted
+			q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
+			q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
+
+			q.Lock.Unlock()
+			// -- ends here
+
+			// As soon as we find new entry for queued pool
+			// we publish that tx to pubsub topic
+			q.PublishAdded(ctx, q.PubSub, tx)
+
+			req.ResponseChan <- true
+
+		case req := <-q.RemoveTxChan:
+
+			// if removed will return non-nil reference to removed tx
+			req.ResponseChan <- txRemover(req.Hash)
+
+		case req := <-q.TxExistsChan:
+
+			// -- Attempt to read safely, begins
+			q.Lock.RLock()
+
+			_, ok := q.Transactions[req.Tx]
+
+			q.Lock.RUnlock()
+			// -- ends here
+
+			req.ResponseChan <- ok
+
+		case req := <-q.GetTxChan:
+
+			// -- Safe reading, begins
+			q.Lock.RLock()
+
+			if tx, ok := q.Transactions[req.Tx]; ok {
+				req.ResponseChan <- tx
+
+				q.Lock.RUnlock()
+				break
+			}
+
+			q.Lock.RUnlock()
+			// -- ends here
+
+			req.ResponseChan <- nil
+
+		case req := <-q.CountTxsChan:
+
+			// -- Safe reading starting here
+			q.Lock.RLock()
+
+			req.ResponseChan <- uint64(q.AscTxsByGasPrice.len())
+
+			q.Lock.RUnlock()
+			// -- ending here
+
+		case req := <-q.ListTxsChan:
+
+			if req.Order == ASC {
+				// -- Safe reading starting here
+				q.Lock.RLock()
+
+				// If empty, just return nil
+				if q.AscTxsByGasPrice.len() == 0 {
+					req.ResponseChan <- nil
+
+					q.Lock.RUnlock()
+					break
+				}
+
+				copied := make([]*MemPoolTx, q.AscTxsByGasPrice.len())
+				copy(copied, q.AscTxsByGasPrice.get())
+
+				req.ResponseChan <- copied
+
+				q.Lock.RUnlock()
+				// -- ending here
+				break
+			}
+
+			if req.Order == DESC {
+				// -- Safe reading starting here
+				q.Lock.RLock()
+
+				// If empty, just return nil
+				if q.DescTxsByGasPrice.len() == 0 {
+					req.ResponseChan <- nil
+
+					q.Lock.RUnlock()
+					break
+				}
+
+				copied := make([]*MemPoolTx, q.DescTxsByGasPrice.len())
+				copy(copied, q.DescTxsByGasPrice.get())
+
+				req.ResponseChan <- copied
+
+				q.Lock.RUnlock()
+				// -- ending here
+			}
+
+		}
+
+	}
+
+}
+
+// Prune - Remove unstuck txs from queued pool & also
+// attempt to place them in pending pool, if not present already
+//
+// @note Start this method as an independent go routine
+func (q *QueuedPool) Prune(ctx context.Context) {
+
+	// Creating worker pool, where jobs to be submitted
+	// for concurrently checking whether tx has been unstuck or not
+	// so that it can be moved to pending pool
+	wp := workerpool.New(config.GetConcurrencyFactor())
+	defer wp.Stop()
+
+	internalChan := make(chan *TxStatus, 1024)
+	var unstuck uint64
+
+	for {
+
+		select {
+
+		case <-ctx.Done():
+			return
+
+		case <-time.After(time.Duration(500) * time.Millisecond):
+
+			txs := q.DescListTxs()
+			if txs == nil {
+				break
+			}
+
+			for i := 0; i < len(txs); i++ {
+
+				func(tx *MemPoolTx) {
+
+					wp.Submit(func() {
+
+						// Finally checking whether this tx is unstuck or not
+						// by doing nonce comparison
+						yes, err := tx.IsUnstuck(ctx, q.RPC)
+						if err != nil {
+
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
+							return
+
+						}
+
+						if yes {
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
+						} else {
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
+						}
+
+					})
+
+				}(txs[i])
+
+			}
+
+		case txStat := <-internalChan:
+
+			if txStat.Status == UNSTUCK {
+
+				// Removing unstuck tx
+				tx := q.Remove(ctx, txStat.Hash)
+				if tx == nil {
+					// probably just been removed by some competing worker
+					// because it became eligible for that
+					continue
+				}
+
+				unstuck++
+
+				// Just check whether we need to add this tx into pending
+				// pool first, if not required, we're not adding it
+				q.PendingPool.VerifiedAdd(ctx, tx)
+
+				if unstuck%10 == 0 {
+					log.Printf("[➖] Removed 10 tx(s) from queued tx pool\n")
+				}
+
+			}
+
+		}
+
+	}
+
 }
 
 // Get - Given tx hash, attempts to find out tx in queued pool, if any
@@ -31,35 +314,33 @@ type QueuedPool struct {
 // Returns nil, if found nothing
 func (q *QueuedPool) Get(hash common.Hash) *MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	respChan := make(chan *MemPoolTx)
 
-	if tx, ok := q.Transactions[hash]; ok {
-		return tx
-	}
+	q.GetTxChan <- GetRequest{Tx: hash, ResponseChan: respChan}
 
-	return nil
+	return <-respChan
 
 }
 
 // Exists - Checks whether tx of given hash exists on queued pool or not
 func (q *QueuedPool) Exists(hash common.Hash) bool {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	respChan := make(chan bool)
 
-	_, ok := q.Transactions[hash]
-	return ok
+	q.TxExistsChan <- ExistsRequest{Tx: hash, ResponseChan: respChan}
+
+	return <-respChan
 
 }
 
 // Count - How many tx(s) currently present in pending pool
 func (q *QueuedPool) Count() uint64 {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	respChan := make(chan uint64)
 
-	return uint64(q.AscTxsByGasPrice.len())
+	q.CountTxsChan <- CountRequest{ResponseChan: respChan}
+
+	return <-respChan
 
 }
 
@@ -73,90 +354,160 @@ func (q *QueuedPool) Count() uint64 {
 // nonce & sender address, as of given ones
 func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
-
-	// Denotes tx hash itself doesn't exists in queued pool
-	//
-	// So we can't find duplicate tx(s) for that txHash
-	targetTx, ok := q.Transactions[hash]
-	if !ok {
+	targetTx := q.Get(hash)
+	if targetTx == nil {
 		return nil
 	}
 
-	result := make([]*MemPoolTx, 0, q.Count())
+	txs := q.DescListTxs()
+	if txs == nil {
+		return nil
+	}
 
-	txs := q.DescTxsByGasPrice.get()
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
+
+	// Attempting to concurrently checking which txs are duplicate
+	// of a given tx hash
+	wp := workerpool.New(runtime.NumCPU())
+
 	for i := 0; i < len(txs); i++ {
 
-		// First checking if tx under radar is the one for which
-		// we're finding duplicate tx(s). If yes, we will move to next one
-		//
-		// Now we can check whether current tx under radar is having same nonce
-		// and sender address, as of target tx ( for which we had txHash, as input )
-		// or not
-		//
-		// If yes, we'll include it considerable duplicate tx list, for given
-		// txHash
-		if txs[i].IsDuplicateOf(targetTx) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsDuplicateOf(targetTx) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
 }
 
-// ListTxs - Returns all tx(s) present in queued pool, as slice
-func (q *QueuedPool) ListTxs() []*MemPoolTx {
+// AscListTxs - Returns all tx(s) present in queued pool, as slice, ascending ordered as per gas price paid
+func (q *QueuedPool) AscListTxs() []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	respChan := make(chan []*MemPoolTx)
 
-	return q.DescTxsByGasPrice.get()
+	q.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: ASC}
+
+	return <-respChan
+
+}
+
+// DescListTxs - Returns all tx(s) present in queued pool, as slice, descending ordered as per gas price paid
+func (q *QueuedPool) DescListTxs() []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	q.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: DESC}
+
+	return <-respChan
 
 }
 
 // TopXWithHighGasPrice - Returns only top `X` tx(s) present in queued mempool,
 // where being top is determined by how much gas price paid by tx sender
 func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
-
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
-
-	return q.DescTxsByGasPrice.get()[:x]
-
+	return q.DescListTxs()[:x]
 }
 
 // TopXWithLowGasPrice - Returns only top `X` tx(s) present in queued mempool,
 // where being top is determined by how low gas price paid by tx sender
 func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
-
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
-
-	return q.AscTxsByGasPrice.get()[:x]
-
+	return q.AscListTxs()[:x]
 }
 
 // SentFrom - Returns a list of queued tx(s) sent from
 // specified address
 func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	if txs == nil {
+		return nil
+	}
 
-	result := make([]*MemPoolTx, 0, q.Count())
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
-	txs := q.DescTxsByGasPrice.get()
+	wp := workerpool.New(runtime.NumCPU())
+
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsSentFrom(address) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsSentFrom(address) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
@@ -166,19 +517,58 @@ func (q *QueuedPool) SentFrom(address common.Address) []*MemPoolTx {
 // specified address
 func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	if txs == nil {
+		return nil
+	}
 
-	result := make([]*MemPoolTx, 0, q.Count())
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
-	txs := q.DescTxsByGasPrice.get()
+	wp := workerpool.New(runtime.NumCPU())
+
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsSentTo(address) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsSentTo(address) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
@@ -188,19 +578,58 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 // living in mempool for more than or equals to `X` time unit
 func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	if txs == nil {
+		return nil
+	}
 
-	result := make([]*MemPoolTx, 0, q.Count())
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
-	txs := q.DescTxsByGasPrice.get()
+	wp := workerpool.New(runtime.NumCPU())
+
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsQueuedForGTE(x) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsQueuedForGTE(x) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
@@ -210,19 +639,58 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 // living in mempool for less than or equals to `X` time unit
 func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
-	q.Lock.RLock()
-	defer q.Lock.RUnlock()
+	txs := q.DescListTxs()
+	if txs == nil {
+		return nil
+	}
 
-	result := make([]*MemPoolTx, 0, q.Count())
+	txCount := uint64(len(txs))
+	commChan := make(chan *MemPoolTx, txCount)
+	result := make([]*MemPoolTx, 0, txCount)
 
-	txs := q.DescTxsByGasPrice.get()
+	wp := workerpool.New(runtime.NumCPU())
+
 	for i := 0; i < len(txs); i++ {
 
-		if txs[i].IsQueuedForLTE(x) {
-			result = append(result, txs[i])
+		func(tx *MemPoolTx) {
+
+			wp.Submit(func() {
+
+				if tx.IsQueuedForLTE(x) {
+					commChan <- tx
+					return
+				}
+
+				commChan <- nil
+
+			})
+
+		}(txs[i])
+
+	}
+
+	var received uint64
+	mustReceive := txCount
+
+	// Waiting for all go routines to finish
+	for v := range commChan {
+
+		if v != nil {
+			result = append(result, v)
+		}
+
+		received++
+		if received >= mustReceive {
+			break
 		}
 
 	}
+
+	// This call is irrelevant here, probably, but still being made
+	//
+	// Because all workers have exited, otherwise we could have never
+	// reached this point
+	wp.Stop()
 
 	return result
 
@@ -233,31 +701,13 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 //
 // If it returns `true`, it denotes, it's success, otherwise it's failure
 // because this tx is already present in pending pool
-func (q *QueuedPool) Add(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
+func (q *QueuedPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
-	q.Lock.Lock()
-	defer q.Lock.Unlock()
+	respChan := make(chan bool)
 
-	if _, ok := q.Transactions[tx.Hash]; ok {
-		return false
-	}
+	q.AddTxChan <- AddRequest{Tx: tx, ResponseChan: respChan}
 
-	// Marking we found this tx in mempool now
-	tx.QueuedAt = time.Now().UTC()
-	tx.Pool = "queued"
-
-	// Creating entry
-	q.Transactions[tx.Hash] = tx
-
-	// As soon as we find new entry for queued pool
-	// we publish that tx to pubsub topic
-	q.PublishAdded(ctx, pubsub, tx)
-
-	// Insert into sorted pending tx list, keep sorted
-	q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
-	q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
-
-	return true
+	return <-respChan
 
 }
 
@@ -279,31 +729,14 @@ func (q *QueuedPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg
 
 }
 
-// Remove - Removes already existing tx from pending tx pool
-// denoting it has been mined i.e. confirmed
-func (q *QueuedPool) Remove(ctx context.Context, pubsub *redis.Client, txHash common.Hash) *MemPoolTx {
+// Remove - Removes unstuck tx from queued pool
+func (q *QueuedPool) Remove(ctx context.Context, txHash common.Hash) *MemPoolTx {
 
-	q.Lock.Lock()
-	defer q.Lock.Unlock()
+	respChan := make(chan *MemPoolTx)
 
-	tx, ok := q.Transactions[txHash]
-	if !ok {
-		return nil
-	}
+	q.RemoveTxChan <- RemovedUnstuckTx{Hash: txHash, ResponseChan: respChan}
 
-	q.Transactions[txHash].UnstuckAt = time.Now().UTC()
-
-	// Publishing unstuck tx, this is probably going to
-	// enter pending pool now
-	q.PublishRemoved(ctx, pubsub, q.Transactions[txHash])
-
-	// Remove from sorted tx list, keep it sorted
-	q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
-	q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
-
-	delete(q.Transactions, txHash)
-
-	return tx
+	return <-respChan
 
 }
 
@@ -329,167 +762,15 @@ func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, m
 
 }
 
-// RemoveUnstuck - Removes queued tx(s) from pool which have been unstuck
-// & returns how many were removed. If 0 is returned, denotes all tx(s) queued last time
-// are still in queued state
-//
-// Only when their respective blocking factor will get unblocked, they'll be pushed
-// into pending pool
-func (q *QueuedPool) RemoveUnstuck(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pendingPool *PendingPool, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) uint64 {
-
-	if q.Count() == 0 {
-		return 0
-	}
-
-	buffer := make([]common.Hash, 0, q.Count())
-
-	// -- Attempt to safely find out which txHashes
-	// are absent in current mempool content, i.e. denoting
-	// those tx(s) are unstuck & can be attempted to be mined
-	// in next block
-	//
-	// So we can also remove those from our queued pool & consider
-	// putting them in pending pool
-	q.Lock.RLock()
-
-	// Creating worker pool, where jobs to be submitted
-	// for concurrently checking status of tx(s)
-	wp := workerpool.New(config.GetConcurrencyFactor())
-
-	commChan := make(chan *TxStatus, q.Count())
-
-	// Attempting to concurrently check status of tx(s)
-	_txs := q.DescTxsByGasPrice.get()
-	for i := 0; i < len(_txs); i++ {
-
-		func(tx *MemPoolTx) {
-
-			wp.Submit(func() {
-
-				// If this queued tx is present in current
-				// queued pool state obtained from RPC node, no need
-				// check whether tx is unstuck or not
-				//
-				// @note Because it's definitely not unstuck
-				if IsPresentInCurrentPool(queued, tx.Hash) {
-
-					commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
-					return
-
-				}
-
-				// Now checking if tx has been moved to pending pool
-				// or not, if yes, we can consider this tx is unstuck
-				// it must be moved out of queued pool
-				if IsPresentInCurrentPool(pending, tx.Hash) {
-
-					commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
-					return
-
-				}
-
-				// Finally checking whether this tx is unstuck or not
-				// by doing nonce comparison
-				yes, err := tx.IsUnstuck(ctx, rpc)
-				if err != nil {
-
-					log.Printf("[❗️] Failed to check if tx unstuck : %s\n", err.Error())
-
-					commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
-					return
-
-				}
-
-				if yes {
-					commChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
-				} else {
-					commChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
-				}
-
-			})
-
-		}(_txs[i])
-
-	}
-
-	var received uint64
-	mustReceive := q.Count()
-
-	// Waiting for all go routines to finish
-	for v := range commChan {
-
-		if v.Status == UNSTUCK {
-			buffer = append(buffer, v.Hash)
-		}
-
-		received++
-		if received >= mustReceive {
-			break
-		}
-
-	}
-
-	// This call is irrelevant here, but still being made
-	//
-	// Because all workers have exited, otherwise we could have never
-	// reached this point
-	wp.Stop()
-
-	q.Lock.RUnlock()
-	// -- Done with safely reading to be removed tx(s)
-
-	// All queued tx(s) present in last iteration
-	// also present in now
-	//
-	// Nothing has changed, so we can't remove any older tx(s)
-	if len(buffer) == 0 {
-		return 0
-	}
-
-	var count uint64
-
-	// Iteratively removing entries which are
-	// not supposed to be present in queued mempool
-	// anymore
-	//
-	// And attempting to add them to pending pool
-	// if they're supposed to be added there
-	for i := 0; i < len(buffer); i++ {
-
-		// removing unstuck tx
-		tx := q.Remove(ctx, pubsub, buffer[i])
-		if tx == nil {
-
-			log.Printf("[❗️] Failed to remove unstuck tx from queued pool\n")
-			continue
-
-		}
-
-		// updating count of removed unstuck tx(s) from
-		// queued pool
-		count++
-
-		// pushing unstuck tx into pending pool
-		// because now it's eligible for it
-		if !pendingPool.Add(ctx, pubsub, tx) {
-			log.Printf("[❗️] Failed to push unstuck tx into pending pool\n")
-		}
-
-	}
-
-	return count
-
-}
-
 // AddQueued - Update latest queued pool state
-func (q *QueuedPool) AddQueued(ctx context.Context, pubsub *redis.Client, txs map[string]map[string]*MemPoolTx) uint64 {
+func (q *QueuedPool) AddQueued(ctx context.Context, txs map[string]map[string]*MemPoolTx) uint64 {
 
 	var count uint64
 
 	for keyO := range txs {
 		for keyI := range txs[keyO] {
 
-			if q.Add(ctx, pubsub, txs[keyO][keyI]) {
+			if q.Add(ctx, txs[keyO][keyI]) {
 				count++
 			}
 

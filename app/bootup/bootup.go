@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph"
+	"github.com/itzmeanjan/harmony/app/listen"
 	"github.com/itzmeanjan/harmony/app/networking"
 )
 
@@ -43,7 +45,11 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	}
 
 	client, err := rpc.DialContext(ctx, config.Get("RPCUrl"))
+	if err != nil {
+		return nil, err
+	}
 
+	wsClient, err := ethclient.DialContext(ctx, config.Get("WSUrl"))
 	if err != nil {
 		return nil, err
 	}
@@ -98,20 +104,59 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
-	pool := &data.MemPool{
-		Pending: &data.PendingPool{
-			Transactions:      make(map[common.Hash]*data.MemPoolTx),
-			AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-			DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
-			Lock:              &sync.RWMutex{},
-		},
-		Queued: &data.QueuedPool{
-			Transactions:      make(map[common.Hash]*data.MemPoolTx),
-			AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-			DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
-			Lock:              &sync.RWMutex{},
-		},
+	// initialising pending pool
+	pendingPool := &data.PendingPool{
+		Transactions:      make(map[common.Hash]*data.MemPoolTx),
+		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
+		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+		Lock:              &sync.RWMutex{},
+		IsPruning:         false,
+		AddTxChan:         make(chan data.AddRequest, 1),
+		RemoveTxChan:      make(chan data.RemoveRequest, 1),
+		TxExistsChan:      make(chan data.ExistsRequest, 1),
+		GetTxChan:         make(chan data.GetRequest, 1),
+		CountTxsChan:      make(chan data.CountRequest, 1),
+		ListTxsChan:       make(chan data.ListRequest, 1),
+		PubSub:            _redis,
+		RPC:               client,
 	}
+
+	// initialising queued pool
+	queuedPool := &data.QueuedPool{
+		Transactions:      make(map[common.Hash]*data.MemPoolTx),
+		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
+		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+		Lock:              &sync.RWMutex{},
+		IsPruning:         false,
+		AddTxChan:         make(chan data.AddRequest, 1),
+		RemoveTxChan:      make(chan data.RemovedUnstuckTx, 1),
+		TxExistsChan:      make(chan data.ExistsRequest, 1),
+		GetTxChan:         make(chan data.GetRequest, 1),
+		CountTxsChan:      make(chan data.CountRequest, 1),
+		ListTxsChan:       make(chan data.ListRequest, 1),
+		PubSub:            _redis,
+		RPC:               client,
+		PendingPool:       pendingPool,
+	}
+
+	pool := &data.MemPool{
+		Pending: pendingPool,
+		Queued:  queuedPool,
+	}
+
+	// Block head listener & pending pool pruner
+	// talks over this buffered channel
+	commChan := make(chan listen.CaughtTxs, 1024)
+
+	// Starting pool life cycle manager go routine
+	go pool.Pending.Start(ctx)
+	// (a)
+	go pool.Pending.Prune(ctx, commChan)
+	go pool.Queued.Start(ctx)
+	go pool.Queued.Prune(ctx)
+	// Listens for new block headers & informs 👆 (a) for pruning
+	// txs which can be/ need to be
+	go listen.SubscribeHead(ctx, wsClient, commChan)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
@@ -130,6 +175,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	return &data.Resource{
 		RPCClient: client,
+		WSClient:  wsClient,
 		Pool:      pool,
 		Redis:     _redis,
 		StartedAt: time.Now().UTC(),

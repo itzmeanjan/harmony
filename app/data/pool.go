@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -142,29 +141,17 @@ func (m *MemPool) TopXQueuedWithLowGasPrice(x uint64) []*MemPoolTx {
 }
 
 // Process - Process all current pending & queued tx pool content & populate our in-memory buffer
-func (m *MemPool) Process(ctx context.Context, rpc *rpc.Client, pubsub *redis.Client, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
+func (m *MemPool) Process(ctx context.Context, pending map[string]map[string]*MemPoolTx, queued map[string]map[string]*MemPoolTx) {
 
 	start := time.Now().UTC()
 
-	if removedQ := m.Queued.RemoveUnstuck(ctx, rpc, pubsub, m.Pending, pending, queued); removedQ != 0 {
-		log.Printf("[➖] Removed %d unstuck tx(s) from queued tx pool, in %s\n", removedQ, time.Now().UTC().Sub(start))
-	}
-
-	start = time.Now().UTC()
-
-	if addedQ := m.Queued.AddQueued(ctx, pubsub, queued); addedQ != 0 {
+	if addedQ := m.Queued.AddQueued(ctx, queued); addedQ != 0 {
 		log.Printf("[➕] Added %d tx(s) to queued tx pool, in %s\n", addedQ, time.Now().UTC().Sub(start))
 	}
 
 	start = time.Now().UTC()
 
-	if removedP := m.Pending.RemoveConfirmedAndDropped(ctx, rpc, pubsub, pending); removedP != 0 {
-		log.Printf("[➖] Removed %d confirmed/ dropped tx(s) from pending tx pool, in %s\n", removedP, time.Now().UTC().Sub(start))
-	}
-
-	start = time.Now().UTC()
-
-	if addedP := m.Pending.AddPendings(ctx, pubsub, pending); addedP != 0 {
+	if addedP := m.Pending.AddPendings(ctx, pending); addedP != 0 {
 		log.Printf("[➕] Added %d tx(s) to pending tx pool, in %s\n", addedP, time.Now().UTC().Sub(start))
 	}
 
@@ -199,7 +186,7 @@ func (m *MemPool) HandleTxFromPeer(ctx context.Context, pubsub *redis.Client, tx
 		// this tx got dropped, we'll try to update our state
 		// same as our peer did
 		if exists {
-			status = m.Pending.Remove(ctx, pubsub, &TxStatus{Hash: tx.Hash, Status: DROPPED})
+			status = m.Pending.Remove(ctx, &TxStatus{Hash: tx.Hash, Status: DROPPED})
 		}
 
 	case "confirmed":
@@ -208,21 +195,21 @@ func (m *MemPool) HandleTxFromPeer(ctx context.Context, pubsub *redis.Client, tx
 		// this tx got confirmed, we'll try to update our state
 		// same as our peer did
 		if exists {
-			status = m.Pending.Remove(ctx, pubsub, &TxStatus{Hash: tx.Hash, Status: CONFIRMED})
+			status = m.Pending.Remove(ctx, &TxStatus{Hash: tx.Hash, Status: CONFIRMED})
 		}
 
 	case "queued":
 
 		// If we don't have it in our state, we'll add it
 		if !exists {
-			status = m.Queued.Add(ctx, pubsub, tx)
+			status = m.Queued.Add(ctx, tx)
 		}
 
 	case "pending":
 
 		// If we don't have it in our state, we'll add it
 		if !exists {
-			status = m.Pending.Add(ctx, pubsub, tx)
+			status = m.Pending.Add(ctx, tx)
 		}
 
 	}

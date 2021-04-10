@@ -51,6 +51,14 @@ func (m *MemPoolTx) IsDuplicateOf(tx *MemPoolTx) bool {
 
 }
 
+// IsLowerNonce - Objective is to find out whether `m` has same
+// of lower nonce than `tx`
+func (m *MemPoolTx) IsLowerNonce(tx *MemPoolTx) bool {
+
+	return m.Hash != tx.Hash && m.From == tx.From && m.Nonce <= tx.Nonce
+
+}
+
 // IsSentFrom - Checks whether this tx was sent from specified address
 // or not
 func (m *MemPoolTx) IsSentFrom(address common.Address) bool {
@@ -276,6 +284,16 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 		}
 
+	default:
+		// handle situation when deserilisation didn't work
+		// properly
+		break
+
+	}
+
+	// In that case, simply return
+	if gqlTx == nil {
+		return nil
 	}
 
 	if m.To != nil {
@@ -318,12 +336,12 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 }
 
-var (
-	STUCK     = 1
-	UNSTUCK   = 2
-	PENDING   = 3
-	CONFIRMED = 4
-	DROPPED   = 5
+const (
+	STUCK = iota + 1
+	UNSTUCK
+	PENDING
+	CONFIRMED
+	DROPPED
 )
 
 // TxStatus - When ever multiple go routines need to

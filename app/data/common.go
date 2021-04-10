@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/gammazero/workerpool"
 )
 
 // IsPresentInCurrentPool - Given tx hash, which was previously present in pending/ queued pool
@@ -17,23 +19,72 @@ import (
 // RPC interface
 func IsPresentInCurrentPool(txs map[string]map[string]*MemPoolTx, txHash common.Hash) bool {
 
+	wp := workerpool.New(runtime.NumCPU())
+	workCount := len(txs)
+	resultChan := make(chan bool, workCount)
+	stopChan := make(chan struct{})
+
 	var present bool
 
-	{
-	OUTER:
-		for _, vOuter := range txs {
-			for _, vInner := range vOuter {
+	// @note ⭐️
+	//
+	// Don't copy value reference here, directly pass it during
+	// function invokation, while accessing value using field `k`
+	for k := range txs {
 
-				if vInner.Hash == txHash {
+		func(txs map[string]*MemPoolTx) {
 
-					present = true
-					break OUTER
+			wp.Submit(func() {
+
+				// Same as ⭐️
+				for k := range txs {
+
+					select {
+
+					case <-stopChan:
+						return
+
+					default:
+						if txs[k].Hash == txHash {
+							resultChan <- true
+							return
+						}
+
+					}
 
 				}
 
-			}
+				// If this worker couldnn't find anything of interest
+				resultChan <- false
+
+			})
+
+		}(txs[k])
+
+	}
+
+	// How many responses received from workers
+	var received int
+
+	for v := range resultChan {
+		if v {
+			present = true
+
+			// No other worker will send anything here
+			// which is exactly why we're fleeing
+			close(stopChan)
+			break
+		}
+
+		received++
+		if received >= workCount {
+			// We're done receiving all responses
+			// from all works we submitted
+			break
 		}
 	}
+
+	wp.Stop()
 
 	return present
 

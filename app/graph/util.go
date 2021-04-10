@@ -273,7 +273,15 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 					// data to deliver it to client in expected format
 					message := UnmarshalPubSubMessage([]byte(m.Payload))
 					if message != nil && pubCriteria(message, params...) {
-						comm <- message.ToGraphQL()
+
+						// Only publish non-nil data i.e. if (de)-serialisation
+						// fails some how, it's better to send nothing, rather than
+						// sending client `nil`
+						sendable := message.ToGraphQL()
+						if sendable != nil {
+							comm <- sendable
+						}
+
 					}
 
 				default:
