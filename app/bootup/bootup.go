@@ -107,8 +107,8 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// initialising pending pool
 	pendingPool := &data.PendingPool{
 		Transactions:      make(map[common.Hash]*data.MemPoolTx),
-		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
+		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
 		Lock:              &sync.RWMutex{},
 		IsPruning:         false,
 		AddTxChan:         make(chan data.AddRequest, 1),
@@ -124,8 +124,8 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// initialising queued pool
 	queuedPool := &data.QueuedPool{
 		Transactions:      make(map[common.Hash]*data.MemPoolTx),
-		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
+		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetQueuedPoolSize()),
+		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetQueuedPoolSize()),
 		Lock:              &sync.RWMutex{},
 		IsPruning:         false,
 		AddTxChan:         make(chan data.AddRequest, 1),

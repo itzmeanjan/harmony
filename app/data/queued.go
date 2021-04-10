@@ -96,7 +96,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		q.Lock.RLock()
 		defer q.Lock.RUnlock()
 
-		return uint64(q.AscTxsByGasPrice.len())+1 > config.GetPendingPoolSize()
+		return uint64(q.AscTxsByGasPrice.len())+1 > config.GetQueuedPoolSize()
 
 	}
 
