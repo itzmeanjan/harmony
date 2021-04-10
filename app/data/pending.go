@@ -271,7 +271,17 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 
 						for i := 0; i < len(prunables); i++ {
 
-							func(tx *MemPoolTx) {
+							func(idx int, tx *MemPoolTx) {
+
+								// First element of this list is always
+								// which tx got mined in block, so it's confirmed
+								//
+								// We might find some associated tx(s), which will non-zero-indexed
+								// elements, so it's safe to avoid `IsDropped` check for first txHash
+								if idx == 0 {
+									internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
+									return
+								}
 
 								wp.Submit(func() {
 
@@ -289,7 +299,7 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 
 								})
 
-							}(prunables[i])
+							}(i, prunables[i])
 
 						}
 
