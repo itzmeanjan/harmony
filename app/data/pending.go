@@ -95,6 +95,8 @@ func (p *PendingPool) Start(ctx context.Context) {
 	// Selecting which tx to be dropped
 	//
 	// - Tx with lowest gas price paid ✅
+	// - Don't accept new tx if it's paying lesser
+	// gas price than current lowest in pool ✅
 	// - Oldest tx living in mempool ❌
 	// - Oldest tx with lowest gas price paid ❌
 	//
@@ -115,6 +117,24 @@ func (p *PendingPool) Start(ctx context.Context) {
 		defer p.Lock.RUnlock()
 
 		return p.AscTxsByGasPrice.get()[0]
+
+	}
+
+	// If we see gas price being offered for new tx is
+	// lower than what's already lowest gas price
+	// being offered in pool, we're not going to accept
+	// this tx
+	//
+	// @note This function is going to be invoked only when we see
+	// we're going to hit limit set by user on how much resource
+	// to consume at max
+	isGasPriceLowerThanExpected := func(tx *MemPoolTx) bool {
+
+		p.Lock.RLock()
+		defer p.Lock.RUnlock()
+
+		currentLowest := p.AscTxsByGasPrice.get()[0]
+		return BigHexToBigDecimal(tx.GasPrice).Cmp(BigHexToBigDecimal(currentLowest.GasPrice)) <= 0
 
 	}
 
@@ -165,6 +185,11 @@ func (p *PendingPool) Start(ctx context.Context) {
 			// -- reading ends
 
 			if needToDropTxs() {
+				if isGasPriceLowerThanExpected(tx) {
+					log.Printf("🧹 Didn't accept new pending tx, was about to hit limit\n")
+					break
+				}
+
 				dropTx()
 				log.Printf("🧹 Dropped pending tx, was about to hit limit\n")
 			}

@@ -109,6 +109,24 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 	}
 
+	// If we see gas price being offered for new tx is
+	// lower than what's already lowest gas price
+	// being offered in pool, we're not going to accept
+	// this tx
+	//
+	// @note This function is going to be invoked only when we see
+	// we're going to hit limit set by user on how much resource
+	// to consume at max
+	isGasPriceLowerThanExpected := func(tx *MemPoolTx) bool {
+
+		q.Lock.RLock()
+		defer q.Lock.RUnlock()
+
+		currentLowest := q.AscTxsByGasPrice.get()[0]
+		return BigHexToBigDecimal(tx.GasPrice).Cmp(BigHexToBigDecimal(currentLowest.GasPrice)) <= 0
+
+	}
+
 	// Silently drop some tx, before adding
 	// new one, so that we don't exceed limit
 	// set up by user
@@ -155,6 +173,11 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			// -- ends here
 
 			if needToDropTxs() {
+				if isGasPriceLowerThanExpected(tx) {
+					log.Printf("🧹 Didn't accept new queued tx, was about to hit limit\n")
+					break
+				}
+
 				dropTx()
 				log.Printf("🧹 Dropped queued tx, was about to hit limit\n")
 			}
