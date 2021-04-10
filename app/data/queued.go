@@ -80,6 +80,56 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 	}
 
+	// Closure for checking whether adding new tx triggers
+	// condition for dropping some other tx
+	//
+	// Selecting which tx to be dropped
+	//
+	// - Tx with lowest gas price paid ✅
+	// - Oldest tx living in mempool ❌
+	// - Oldest tx with lowest gas price paid ❌
+	//
+	// ✅ : Implemented
+	// ❌ : Not yet
+	needToDropTxs := func() bool {
+
+		q.Lock.RLock()
+		defer q.Lock.RUnlock()
+
+		return uint64(q.AscTxsByGasPrice.len())+1 > config.GetPendingPoolSize()
+
+	}
+
+	pickTxWithLowestGasPrice := func() *MemPoolTx {
+
+		q.Lock.RLock()
+		defer q.Lock.RUnlock()
+
+		return q.AscTxsByGasPrice.get()[0]
+
+	}
+
+	// Silently drop some tx, before adding
+	// new one, so that we don't exceed limit
+	// set up by user
+	dropTx := func() {
+
+		// because this is the only scheme currently
+		// supported
+		tx := pickTxWithLowestGasPrice()
+
+		// -- Safe writing, critical section begins
+		q.Lock.Lock()
+		defer q.Lock.Unlock()
+
+		// Remove from sorted tx list, keep it sorted
+		q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
+		q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
+
+		delete(q.Transactions, tx.Hash)
+
+	}
+
 	for {
 
 		select {
@@ -103,6 +153,11 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 			q.Lock.RUnlock()
 			// -- ends here
+
+			if needToDropTxs() {
+				dropTx()
+				log.Printf("🧹 Dropped queued tx, was about to hit limit\n")
+			}
 
 			// Marking we found this tx in mempool now
 			tx.QueuedAt = time.Now().UTC()

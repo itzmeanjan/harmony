@@ -164,6 +164,11 @@ func (p *PendingPool) Start(ctx context.Context) {
 			p.Lock.RUnlock()
 			// -- reading ends
 
+			if needToDropTxs() {
+				dropTx()
+				log.Printf("🧹 Dropped pending tx, was about to hit limit\n")
+			}
+
 			// Marking we found this tx in mempool now
 			tx.PendingFrom = time.Now().UTC()
 			tx.Pool = "pending"
