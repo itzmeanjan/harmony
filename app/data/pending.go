@@ -20,6 +20,7 @@ import (
 // be mined in next block
 type PendingPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
+	TxsFromAddress    map[common.Address]TxList
 	DroppedTxs        map[common.Hash]bool
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
@@ -33,6 +34,38 @@ type PendingPool struct {
 	ListTxsChan       chan ListRequest
 	PubSub            *redis.Client
 	RPC               *rpc.Client
+}
+
+// HasBeenAllocatedFor - Given an address from which tx was sent
+// is being checked for whether we've allocated some memory space for keeping txs
+// in pool, only sent from that specific address or not
+func (p *PendingPool) HasBeenAllocatedFor(addr common.Address) bool {
+
+	p.Lock.RLock()
+	defer p.Lock.RUnlock()
+
+	_, ok := p.TxsFromAddress[addr]
+	return ok
+
+}
+
+// AllocateFor - If memory for keeping txs sent from some
+// specifiic address is not allocated yet, it'll do so
+// for 16 tx entries
+//
+// It means, it can at max keep 16 txs from same address in pool, primarily
+// But it can be incremented if required
+func (p *PendingPool) AllocateFor(addr common.Address) {
+
+	if p.HasBeenAllocatedFor(addr) {
+		return
+	}
+
+	p.Lock.Lock()
+	defer p.Lock.Unlock()
+
+	p.TxsFromAddress[addr] = make(TxsFromAddressAsc, 0, 16)
+
 }
 
 // Start - This method is supposed to be run as an independent

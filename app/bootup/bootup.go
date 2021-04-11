@@ -107,6 +107,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// initialising pending pool
 	pendingPool := &data.PendingPool{
 		Transactions:      make(map[common.Hash]*data.MemPoolTx),
+		TxsFromAddress:    make(map[common.Address]data.TxList),
 		DroppedTxs:        make(map[common.Hash]bool),
 		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
 		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
