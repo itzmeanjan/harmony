@@ -384,7 +384,23 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 		case txs := <-commChan:
 
 			var prunables []*MemPoolTx = make([]*MemPoolTx, 0, len(txs))
-			var alreadyAddedFromA map[common.Address]hexutil.Uint64 = make(map[common.Address]hexutil.Uint64)
+
+			// How & which prunable tx(s) are kept in linear memory slot `prunables`
+			// i.e. starting from where & how many of those
+			//
+			// If we find one higher nonce value is processed already, we're skipping
+			// it because it **must** have included all lower nonce txs living in pool
+			// from same address
+			//
+			// But otherwise, we'll remove what already we've included for some lower
+			// nonce tx & include all for some higher nonce tx
+			type metadata struct {
+				nonce hexutil.Uint64
+				from  int
+				count int
+			}
+
+			var alreadyAddedFromA map[common.Address]*metadata = make(map[common.Address]*metadata)
 
 			for i := 0; i < len(txs); i++ {
 
@@ -394,14 +410,32 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 					continue
 				}
 
-				if workedOnNonce, ok := alreadyAddedFromA[tx.From]; ok && workedOnNonce > tx.Nonce {
-					// well, we've already added tx into `prunables`, because we're already
-					// done with processing some tx with higher nonce & this tx was included there
-					continue
+				if meta, ok := alreadyAddedFromA[tx.From]; ok {
+
+					if meta.nonce > tx.Nonce {
+						// well, we've already added tx into `prunables`, because we're already
+						// done with processing some tx with higher nonce & this tx was included there
+						continue
+					}
+
+					// We've already added prunables for some smaller nonce value
+					// which is why we're going to remove those from memory to avoid
+					// processing duplicates
+					copy(prunables[meta.from:], prunables[meta.from+meta.count:])
+					for j := 0; j < meta.count; j++ {
+						prunables[len(prunables)-meta.count+j] = nil
+					}
+					prunables = prunables[:len(prunables)-meta.count]
+					alreadyAddedFromA[tx.From] = nil
+
 				}
 
-				prunables = append(prunables, p.Prunables(tx)...)
-				alreadyAddedFromA[tx.From] = tx.Nonce
+				_prunableLocal := p.Prunables(tx)
+				_prubableLocalC := len(_prunableLocal)
+				_metadata := metadata{nonce: tx.Nonce, from: len(prunables), count: _prubableLocalC}
+
+				prunables = append(prunables, _prunableLocal...)
+				alreadyAddedFromA[tx.From] = &_metadata
 
 			}
 
