@@ -39,10 +39,9 @@ type PendingPool struct {
 // HasBeenAllocatedFor - Given an address from which tx was sent
 // is being checked for whether we've allocated some memory space for keeping txs
 // in pool, only sent from that specific address or not
-func (p *PendingPool) HasBeenAllocatedFor(addr common.Address) bool {
-
-	p.Lock.RLock()
-	defer p.Lock.RUnlock()
+//
+// @note This function is supposed to be invoked when lock is already held
+func (p *PendingPool) hasBeenAllocatedFor(addr common.Address) bool {
 
 	_, ok := p.TxsFromAddress[addr]
 	return ok
@@ -55,16 +54,16 @@ func (p *PendingPool) HasBeenAllocatedFor(addr common.Address) bool {
 //
 // It means, it can at max keep 16 txs from same address in pool, primarily
 // But it can be incremented if required
-func (p *PendingPool) AllocateFor(addr common.Address) {
+//
+// @note This function is supposed to be invoked when lock is already held
+func (p *PendingPool) allocateFor(addr common.Address) TxList {
 
-	if p.HasBeenAllocatedFor(addr) {
-		return
+	if p.hasBeenAllocatedFor(addr) {
+		return p.TxsFromAddress[addr]
 	}
 
-	p.Lock.Lock()
-	defer p.Lock.Unlock()
-
 	p.TxsFromAddress[addr] = make(TxsFromAddressAsc, 0, 16)
+	return p.TxsFromAddress[addr]
 
 }
 
@@ -103,10 +102,30 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 	}
 
-	// Silently drop some tx, before adding
-	// new one, so that we don't exceed limit
-	// set up by user
-	dropTx := func(tx *MemPoolTx) {
+	// Plain simple safe tx adding into pool, logic, invoke it from other section
+	//
+	// Don't rewrite this logic again
+	//
+	// @note Just make sure, you don't hold lock, when you call
+	// this
+	addTx := func(tx *MemPoolTx) {
+
+		// -- Safe writing, critical section begins
+		p.Lock.Lock()
+		defer p.Lock.Unlock()
+
+		p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
+		p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
+		p.TxsFromAddress[tx.From] = Insert(p.allocateFor(tx.From), tx)
+		p.Transactions[tx.Hash] = tx
+
+	}
+
+	// Plain simple remove tx logic, use it everywhere else
+	//
+	// @note Just make sure, you don't hold lock, when you call
+	// this
+	removeTx := func(tx *MemPoolTx) {
 
 		// -- Safe writing, critical section begins
 		p.Lock.Lock()
@@ -115,8 +134,21 @@ func (p *PendingPool) Start(ctx context.Context) {
 		// Remove from sorted tx list, keep it sorted
 		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
 		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
+		p.TxsFromAddress[tx.From] = Remove(p.TxsFromAddress[tx.From], tx)
 		delete(p.Transactions, tx.Hash)
 
+	}
+
+	// Silently drop some tx, before adding
+	// new one, so that we don't exceed limit
+	// set up by user
+	dropTx := func(tx *MemPoolTx) {
+
+		removeTx(tx)
+		// 👇 op not being done while holding lock
+		// is due to the fact, no other competing
+		// worker attempting to read from/ write to
+		// this one, now
 		p.DroppedTxs[tx.Hash] = true
 
 	}
@@ -149,18 +181,9 @@ func (p *PendingPool) Start(ctx context.Context) {
 		tx.PendingFrom = time.Now().UTC()
 		tx.Pool = "pending"
 
-		// --- Critical section, starts
-		p.Lock.Lock()
-
-		// Creating entry
-		p.Transactions[tx.Hash] = tx
-
-		// Insert into sorted pending tx list, keep sorted
-		p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
-		p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
-
-		p.Lock.Unlock()
-		// --- ends here
+		// Don't hold lock here, it'll be attempted to be acquired
+		// in called function
+		addTx(tx)
 
 		// After adding new tx in pending pool, also attempt to
 		// publish it to pubsub topic
@@ -202,17 +225,9 @@ func (p *PendingPool) Start(ctx context.Context) {
 			tx.ConfirmedAt = time.Now().UTC()
 		}
 
-		// -- Safe writing, critical section begins
-		p.Lock.Lock()
-
-		// Remove from sorted tx list, keep it sorted
-		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
-		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
-
-		delete(p.Transactions, txStat.Hash)
-
-		p.Lock.Unlock()
-		// -- writing ends
+		// Don't hold lock here, it'll be attempted to be acquired
+		// in called function
+		removeTx(tx)
 
 		// Publishing this confirmed/ dropped tx
 		p.PublishRemoved(ctx, p.PubSub, tx)
