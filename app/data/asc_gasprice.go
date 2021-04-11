@@ -60,12 +60,11 @@ func (m MemPoolTxsAsc) findTx(low int, high int, tx *MemPoolTx) int {
 
 	if low == high {
 
-		idx := findTxFromSlice(m[low:], tx)
-		if idx == -1 {
-			return -1
+		if m[low].Hash == tx.Hash {
+			return low
 		}
 
-		return low + idx
+		return -1
 
 	}
 
