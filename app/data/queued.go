@@ -22,20 +22,44 @@ import (
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
+	TxsFromAddress    map[common.Address]TxList
 	DroppedTxs        map[common.Hash]bool
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
-	IsPruning         bool
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemovedUnstuckTx
 	TxExistsChan      chan ExistsRequest
 	GetTxChan         chan GetRequest
 	CountTxsChan      chan CountRequest
 	ListTxsChan       chan ListRequest
+	TxsFromAChan      chan TxsFromARequest
 	PubSub            *redis.Client
 	RPC               *rpc.Client
 	PendingPool       *PendingPool
+}
+
+// hasBeenAllocatedFor - Checking whether memory has been allocated
+// for storing all txs from certain address `A`, living in queued pool
+func (q *QueuedPool) hasBeenAllocatedFor(addr common.Address) bool {
+
+	_, ok := q.TxsFromAddress[addr]
+	return ok
+
+}
+
+// allocateFor - Primarily allocate some memory for keeping
+// track of which txs are sent from address `A`, in ascending order
+// as per nonce
+func (q *QueuedPool) allocateFor(addr common.Address) TxList {
+
+	if q.hasBeenAllocatedFor(addr) {
+		return q.TxsFromAddress[addr]
+	}
+
+	q.TxsFromAddress[addr] = make(TxsFromAddressAsc, 0, 16)
+	return q.TxsFromAddress[addr]
+
 }
 
 // Start - This method is supposed to be started as a
