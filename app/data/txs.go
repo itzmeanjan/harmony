@@ -31,6 +31,8 @@ func Insert(txs TxList, tx *MemPoolTx) TxList {
 			return (MemPoolTxsAsc)(_txs)
 		case MemPoolTxsDesc:
 			return (MemPoolTxsDesc)(_txs)
+		case TxsFromAddressAsc:
+			return (TxsFromAddressAsc)(_txs)
 		default:
 			return nil
 
@@ -55,6 +57,8 @@ func Insert(txs TxList, tx *MemPoolTx) TxList {
 		return (MemPoolTxsAsc)(_txs)
 	case MemPoolTxsDesc:
 		return (MemPoolTxsDesc)(_txs)
+	case TxsFromAddressAsc:
+		return (TxsFromAddressAsc)(_txs)
 	default:
 		return nil
 
@@ -82,6 +86,8 @@ func Remove(txs TxList, tx *MemPoolTx) TxList {
 		return (MemPoolTxsAsc)(_txs)
 	case MemPoolTxsDesc:
 		return (MemPoolTxsDesc)(_txs)
+	case TxsFromAddressAsc:
+		return (TxsFromAddressAsc)(_txs)
 	default:
 		return nil
 
