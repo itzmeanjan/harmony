@@ -335,6 +335,26 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// -- ends
 			}
 
+		case req := <-p.TxsFromAChan:
+			// Return only those txs, which were sent by specific address `A`
+
+			if txs, ok := p.TxsFromAddress[req.From]; ok {
+
+				if txs.len() == 0 {
+					req.ResponseChan <- nil
+					break
+				}
+
+				copied := make([]*MemPoolTx, txs.len())
+				copy(copied, txs.get())
+
+				req.ResponseChan <- copied
+				break
+
+			}
+
+			req.ResponseChan <- nil
+
 		}
 
 	}
@@ -639,6 +659,18 @@ func (p *PendingPool) DescListTxs() []*MemPoolTx {
 	respChan := make(chan []*MemPoolTx)
 
 	p.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: DESC}
+
+	return <-respChan
+
+}
+
+// TxsFromA - Returns a slice of txs, where all of those are sent
+// by address `A`
+func (p *PendingPool) TxsFromA(addr common.Address) []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	p.TxsFromAChan <- TxsFromARequest{ResponseChan: respChan, From: addr}
 
 	return <-respChan
 
