@@ -149,7 +149,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	// Block head listener & pending pool pruner
 	// talks over this buffered channel
-	commChan := make(chan listen.CaughtTxs, 1024)
+	commChan := make(chan listen.CaughtTxs, 1)
 
 	// Starting pool life cycle manager go routine
 	go pool.Pending.Start(ctx)
