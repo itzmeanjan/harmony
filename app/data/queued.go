@@ -67,44 +67,6 @@ func (q *QueuedPool) allocateFor(addr common.Address) TxList {
 // through out its life
 func (q *QueuedPool) Start(ctx context.Context) {
 
-	txRemover := func(txHash common.Hash) *MemPoolTx {
-
-		// -- Safely reading from map, begins
-		q.Lock.RLock()
-
-		tx, ok := q.Transactions[txHash]
-		if !ok {
-
-			q.Lock.RUnlock()
-			return nil
-
-		}
-
-		q.Lock.RUnlock()
-		// -- reading ends
-
-		tx.UnstuckAt = time.Now().UTC()
-
-		// -- Safe writing begins, critical section
-		q.Lock.Lock()
-
-		// Remove from sorted tx list, keep it sorted
-		q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
-		q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
-
-		delete(q.Transactions, txHash)
-
-		q.Lock.Unlock()
-		// -- ends
-
-		// Publishing unstuck tx, this is probably going to
-		// enter pending pool now
-		q.PublishRemoved(ctx, q.PubSub, q.Transactions[txHash])
-
-		return tx
-
-	}
-
 	// Closure for checking whether adding new tx triggers
 	// condition for dropping some other tx
 	//
@@ -136,10 +98,26 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 	}
 
-	// Silently drop some tx, before adding
-	// new one, so that we don't exceed limit
-	// set up by user
-	dropTx := func(tx *MemPoolTx) {
+	// For adding new tx into queued pool, always
+	// invoke this closure
+	addTx := func(tx *MemPoolTx) {
+
+		// -- Critical section of code 👇
+		q.Lock.Lock()
+		defer q.Lock.Unlock()
+
+		q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
+		q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
+		q.TxsFromAddress[tx.From] = Insert(q.allocateFor(tx.From), tx)
+		q.Transactions[tx.Hash] = tx
+
+	}
+
+	// Plain simple tx removing logic. Rather than rewriting
+	// same logic in multiple places, consider using this one
+	//
+	// @note Don't hold lock when invoking this method
+	removeTx := func(tx *MemPoolTx) {
 
 		// -- Safe writing, critical section begins
 		q.Lock.Lock()
@@ -148,10 +126,85 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		// Remove from sorted tx list, keep it sorted
 		q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
 		q.DescTxsByGasPrice = Remove(q.DescTxsByGasPrice, tx)
-
+		q.TxsFromAddress[tx.From] = Remove(q.TxsFromAddress[tx.From], tx)
 		delete(q.Transactions, tx.Hash)
 
+	}
+
+	// Silently drop some tx, before adding
+	// new one, so that we don't exceed limit
+	// set up by user
+	dropTx := func(tx *MemPoolTx) {
+
+		removeTx(tx)
+		// Marking that tx has been dropped, so that
+		// it won't get picked up next time
 		q.DroppedTxs[tx.Hash] = true
+
+	}
+
+	txAdder := func(tx *MemPoolTx) bool {
+
+		// -- Safe reading begins
+		q.Lock.RLock()
+
+		if _, ok := q.Transactions[tx.Hash]; ok {
+			q.Lock.RUnlock()
+			return false
+		}
+
+		if _, ok := q.DroppedTxs[tx.Hash]; ok {
+			q.Lock.RUnlock()
+			return false
+		}
+
+		q.Lock.RUnlock()
+		// -- ends here
+
+		if needToDropTxs() {
+			dropTx(pickTxWithLowestGasPrice())
+			log.Printf("🧹 Dropped queued tx, was about to hit limit\n")
+		}
+
+		// Marking we found this tx in mempool now
+		tx.QueuedAt = time.Now().UTC()
+		tx.Pool = "queued"
+
+		addTx(tx)
+
+		// As soon as we find new entry for queued pool
+		// we publish that tx to pubsub topic
+		q.PublishAdded(ctx, q.PubSub, tx)
+
+		return true
+
+	}
+
+	txRemover := func(txHash common.Hash) *MemPoolTx {
+
+		// -- Safely reading from map, begins
+		q.Lock.RLock()
+
+		tx, ok := q.Transactions[txHash]
+		if !ok {
+
+			q.Lock.RUnlock()
+			return nil
+
+		}
+
+		q.Lock.RUnlock()
+		// -- reading ends
+
+		tx.UnstuckAt = time.Now().UTC()
+
+		removeTx(tx)
+
+		// Publishing unstuck tx, this is probably going to
+		// enter pending pool now
+		q.PublishRemoved(ctx, q.PubSub, q.Transactions[txHash])
+
+		return tx
 
 	}
 
@@ -163,56 +216,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			return
 		case req := <-q.AddTxChan:
 
-			// This is what we're trying to add
-			tx := req.Tx
-
-			// -- Safe reading begins
-			q.Lock.RLock()
-
-			if _, ok := q.Transactions[tx.Hash]; ok {
-				req.ResponseChan <- false
-
-				q.Lock.RUnlock()
-				break
-			}
-
-			if _, ok := q.DroppedTxs[tx.Hash]; ok {
-				req.ResponseChan <- false
-
-				q.Lock.RUnlock()
-				break
-			}
-
-			q.Lock.RUnlock()
-			// -- ends here
-
-			if needToDropTxs() {
-				dropTx(pickTxWithLowestGasPrice())
-				log.Printf("🧹 Dropped queued tx, was about to hit limit\n")
-			}
-
-			// Marking we found this tx in mempool now
-			tx.QueuedAt = time.Now().UTC()
-			tx.Pool = "queued"
-
-			// -- Critical section begins
-			q.Lock.Lock()
-
-			// Creating entry
-			q.Transactions[tx.Hash] = tx
-
-			// Insert into sorted pending tx list, keep sorted
-			q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
-			q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
-
-			q.Lock.Unlock()
-			// -- ends here
-
-			// As soon as we find new entry for queued pool
-			// we publish that tx to pubsub topic
-			q.PublishAdded(ctx, q.PubSub, tx)
-
-			req.ResponseChan <- true
+			req.ResponseChan <- txAdder(req.Tx)
 
 		case req := <-q.RemoveTxChan:
 
@@ -302,6 +306,25 @@ func (q *QueuedPool) Start(ctx context.Context) {
 				q.Lock.RUnlock()
 				// -- ending here
 			}
+
+		case req := <-q.TxsFromAChan:
+
+			if txs, ok := q.TxsFromAddress[req.From]; ok {
+
+				if txs.len() == 0 {
+					req.ResponseChan <- nil
+					break
+				}
+
+				copied := make([]*MemPoolTx, txs.len())
+				copy(copied, txs.get())
+
+				req.ResponseChan <- copied
+				break
+
+			}
+
+			req.ResponseChan <- nil
 
 		}
 
@@ -522,6 +545,18 @@ func (q *QueuedPool) DescListTxs() []*MemPoolTx {
 	respChan := make(chan []*MemPoolTx)
 
 	q.ListTxsChan <- ListRequest{ResponseChan: respChan, Order: DESC}
+
+	return <-respChan
+
+}
+
+// TxsFromA - Returns a slice of txs, where all of those are sent
+// by address `A`
+func (q *QueuedPool) TxsFromA(addr common.Address) []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	q.TxsFromAChan <- TxsFromARequest{ResponseChan: respChan, From: addr}
 
 	return <-respChan
 
