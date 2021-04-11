@@ -5,10 +5,10 @@ import (
 	"log"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gammazero/workerpool"
 	"github.com/go-redis/redis/v8"
@@ -383,59 +383,49 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 
 		case txs := <-commChan:
 
-			var expected uint64
+			var prunables []*MemPoolTx = make([]*MemPoolTx, 0, len(txs))
+			var alreadyAddedFromA map[common.Address]hexutil.Uint64 = make(map[common.Address]hexutil.Uint64)
 
 			for i := 0; i < len(txs); i++ {
 
-				func(tx *listen.CaughtTx) {
+				tx := p.Get(txs[i].Hash)
+				if tx == nil {
+					// well, couldn't find tx in pool
+					continue
+				}
+
+				if workedOnNonce, ok := alreadyAddedFromA[tx.From]; ok && workedOnNonce > tx.Nonce {
+					// well, we've already added tx into `prunables`, because we're already
+					// done with processing some tx with higher nonce & this tx was included there
+					continue
+				}
+
+				prunables = append(prunables, p.Prunables(tx)...)
+				alreadyAddedFromA[tx.From] = tx.Nonce
+
+			}
+
+			for i := 0; i < len(prunables); i++ {
+
+				func(tx *MemPoolTx) {
 
 					wp.Submit(func() {
 
-						prunables := p.Prunables(tx.Hash)
-						if prunables == nil {
+						// Tx got confirmed/ dropped, to be used when computing
+						// how long it spent in pending pool
+						dropped, _ := tx.IsDropped(ctx, p.RPC)
+						if dropped {
+
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
 							return
-						}
-
-						// Atomic increment, concurrent-safe [ expecting to behave well on all platforms ]
-						atomic.AddUint64(&expected, uint64(len(prunables)))
-
-						for i := 0; i < len(prunables); i++ {
-
-							func(idx int, tx *MemPoolTx) {
-
-								// First element of this list is always
-								// which tx got mined in block, so it's confirmed
-								//
-								// We might find some associated tx(s), which will non-zero-indexed
-								// elements, so it's safe to avoid `IsDropped` check for first txHash
-								if idx == 0 {
-									internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
-									return
-								}
-
-								wp.Submit(func() {
-
-									// Tx got confirmed/ dropped, to be used when computing
-									// how long it spent in pending pool
-									dropped, _ := tx.IsDropped(ctx, p.RPC)
-									if dropped {
-
-										internalChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
-										return
-
-									}
-
-									internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
-
-								})
-
-							}(i, prunables[i])
 
 						}
+
+						internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
 
 					})
 
-				}(txs[i])
+				}(prunables[i])
 
 			}
 
@@ -496,18 +486,12 @@ func (p *PendingPool) Count() uint64 {
 
 }
 
-// Prunables - Given tx hash, with which a tx has been mined
-// we're attempting to find out all txs which are living in pending pool
-// now & having same sender address & same/ lower nonce, so that
+// Prunables - Given tx, we're attempting to find out all txs which are living
+// in pending pool now & having same sender address & same/ lower nonce, so that
 // pruner can update state while removing mined txs from mempool
-func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
+func (p *PendingPool) Prunables(targetTx *MemPoolTx) []*MemPoolTx {
 
-	targetTx := p.Get(hash)
-	if targetTx == nil {
-		return nil
-	}
-
-	txs := p.DescListTxs()
+	txs := p.TxsFromA(targetTx.From)
 	if txs == nil {
 		return nil
 	}
@@ -518,9 +502,13 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 	// This is the tx which got mined
 	result = append(result, targetTx)
 
-	// Attempting to concurrently checking which txs are duplicate
-	// of a given tx hash
-	wp := workerpool.New(runtime.NumCPU())
+	var wp *workerpool.WorkerPool
+
+	if txCount > uint64(runtime.NumCPU()) {
+		wp = workerpool.New(runtime.NumCPU())
+	} else {
+		wp = workerpool.New(int(txCount))
+	}
 
 	for i := 0; i < len(txs); i++ {
 
@@ -528,7 +516,7 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 
 			wp.Submit(func() {
 
-				if tx.IsLowerNonce(targetTx) {
+				if tx.Hash != targetTx.Hash && tx.Nonce <= targetTx.Nonce {
 					commChan <- tx
 					return
 				}
@@ -542,7 +530,6 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 	}
 
 	var received uint64
-	mustReceive := txCount
 
 	// Waiting for all go routines to finish
 	for v := range commChan {
@@ -552,7 +539,7 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 		}
 
 		received++
-		if received >= mustReceive {
+		if received >= txCount {
 			break
 		}
 
