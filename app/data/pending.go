@@ -72,6 +72,104 @@ func (p *PendingPool) AllocateFor(addr common.Address) {
 // go routine, maintaining pending pool state, through out its life time
 func (p *PendingPool) Start(ctx context.Context) {
 
+	// Closure for checking whether adding new tx triggers
+	// condition for dropping some other tx
+	//
+	// Selecting which tx to be dropped
+	//
+	// - Tx with lowest gas price paid ✅
+	// - Oldest tx living in mempool ❌
+	// - Oldest tx with lowest gas price paid ❌
+	//
+	// ✅ : Implemented
+	// ❌ : Not yet
+	//
+	// @note Don't accept tx which are already dropped
+	needToDropTxs := func() bool {
+
+		p.Lock.RLock()
+		defer p.Lock.RUnlock()
+
+		return uint64(p.AscTxsByGasPrice.len())+1 > config.GetPendingPoolSize()
+
+	}
+
+	pickTxWithLowestGasPrice := func() *MemPoolTx {
+
+		p.Lock.RLock()
+		defer p.Lock.RUnlock()
+
+		return p.AscTxsByGasPrice.get()[0]
+
+	}
+
+	// Silently drop some tx, before adding
+	// new one, so that we don't exceed limit
+	// set up by user
+	dropTx := func(tx *MemPoolTx) {
+
+		// -- Safe writing, critical section begins
+		p.Lock.Lock()
+		defer p.Lock.Unlock()
+
+		// Remove from sorted tx list, keep it sorted
+		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
+		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
+		delete(p.Transactions, tx.Hash)
+
+		p.DroppedTxs[tx.Hash] = true
+
+	}
+
+	// Closure for safely adding new tx into pool
+	txAdder := func(tx *MemPoolTx) bool {
+
+		// -- Safe reading begins
+		p.Lock.RLock()
+
+		if _, ok := p.Transactions[tx.Hash]; ok {
+			p.Lock.RUnlock()
+			return false
+		}
+
+		if _, ok := p.DroppedTxs[tx.Hash]; ok {
+			p.Lock.RUnlock()
+			return false
+		}
+
+		p.Lock.RUnlock()
+		// -- reading ends
+
+		if needToDropTxs() {
+			dropTx(pickTxWithLowestGasPrice())
+			log.Printf("🧹 Dropped pending tx, was about to hit limit\n")
+		}
+
+		// Marking we found this tx in mempool now
+		tx.PendingFrom = time.Now().UTC()
+		tx.Pool = "pending"
+
+		// --- Critical section, starts
+		p.Lock.Lock()
+
+		// Creating entry
+		p.Transactions[tx.Hash] = tx
+
+		// Insert into sorted pending tx list, keep sorted
+		p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
+		p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
+
+		p.Lock.Unlock()
+		// --- ends here
+
+		// After adding new tx in pending pool, also attempt to
+		// publish it to pubsub topic
+		p.PublishAdded(ctx, p.PubSub, tx)
+
+		return true
+
+	}
+
 	// Just a closure, which will remove existing tx
 	// from pending pool, assuming it has been confirmed/ dropped
 	//
@@ -123,55 +221,6 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 	}
 
-	// Closure for checking whether adding new tx triggers
-	// condition for dropping some other tx
-	//
-	// Selecting which tx to be dropped
-	//
-	// - Tx with lowest gas price paid ✅
-	// - Oldest tx living in mempool ❌
-	// - Oldest tx with lowest gas price paid ❌
-	//
-	// ✅ : Implemented
-	// ❌ : Not yet
-	//
-	// @note Don't accept tx which are already dropped
-	needToDropTxs := func() bool {
-
-		p.Lock.RLock()
-		defer p.Lock.RUnlock()
-
-		return uint64(p.AscTxsByGasPrice.len())+1 > config.GetPendingPoolSize()
-
-	}
-
-	pickTxWithLowestGasPrice := func() *MemPoolTx {
-
-		p.Lock.RLock()
-		defer p.Lock.RUnlock()
-
-		return p.AscTxsByGasPrice.get()[0]
-
-	}
-
-	// Silently drop some tx, before adding
-	// new one, so that we don't exceed limit
-	// set up by user
-	dropTx := func(tx *MemPoolTx) {
-
-		// -- Safe writing, critical section begins
-		p.Lock.Lock()
-		defer p.Lock.Unlock()
-
-		// Remove from sorted tx list, keep it sorted
-		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
-		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
-		delete(p.Transactions, tx.Hash)
-
-		p.DroppedTxs[tx.Hash] = true
-
-	}
-
 	for {
 
 		select {
@@ -181,56 +230,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.AddTxChan:
 
-			// This is what we're trying to add
-			tx := req.Tx
-
-			// -- Safe reading begins
-			p.Lock.RLock()
-
-			if _, ok := p.Transactions[tx.Hash]; ok {
-				req.ResponseChan <- false
-
-				p.Lock.RUnlock()
-				break
-			}
-
-			if _, ok := p.DroppedTxs[tx.Hash]; ok {
-				req.ResponseChan <- false
-
-				p.Lock.RUnlock()
-				break
-			}
-
-			p.Lock.RUnlock()
-			// -- reading ends
-
-			if needToDropTxs() {
-				dropTx(pickTxWithLowestGasPrice())
-				log.Printf("🧹 Dropped pending tx, was about to hit limit\n")
-			}
-
-			// Marking we found this tx in mempool now
-			tx.PendingFrom = time.Now().UTC()
-			tx.Pool = "pending"
-
-			// --- Critical section, starts
-			p.Lock.Lock()
-
-			// Creating entry
-			p.Transactions[tx.Hash] = tx
-
-			// Insert into sorted pending tx list, keep sorted
-			p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
-			p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
-
-			p.Lock.Unlock()
-			// --- ends here
-
-			// After adding new tx in pending pool, also attempt to
-			// publish it to pubsub topic
-			p.PublishAdded(ctx, p.PubSub, tx)
-
-			req.ResponseChan <- true
+			req.ResponseChan <- txAdder(req.Tx)
 
 		case req := <-p.RemoveTxChan:
 
