@@ -25,13 +25,13 @@ type PendingPool struct {
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	Lock              *sync.RWMutex
-	IsPruning         bool
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemoveRequest
 	TxExistsChan      chan ExistsRequest
 	GetTxChan         chan GetRequest
 	CountTxsChan      chan CountRequest
 	ListTxsChan       chan ListRequest
+	TxsFromAChan      chan TxsFromARequest
 	PubSub            *redis.Client
 	RPC               *rpc.Client
 }
