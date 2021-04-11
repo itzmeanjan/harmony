@@ -336,7 +336,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 // attempt to place them in pending pool, if not present already
 //
 // @note Start this method as an independent go routine
-func (q *QueuedPool) Prune(ctx context.Context) {
+func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking whether tx has been unstuck or not
@@ -344,7 +344,7 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 	wp := workerpool.New(config.GetConcurrencyFactor())
 	defer wp.Stop()
 
-	internalChan := make(chan *TxStatus, 1024)
+	internalChan := make(chan *TxStatus, 4096)
 	var unstuck uint64
 
 	for {
@@ -354,38 +354,18 @@ func (q *QueuedPool) Prune(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
-		case <-time.After(time.Duration(500) * time.Millisecond):
+		case mined := <-commChan:
 
-			txs := q.DescListTxs()
+			txs := q.TxsFromA(mined.From)
 			if txs == nil {
 				break
 			}
 
 			for i := 0; i < len(txs); i++ {
 
-				func(tx *MemPoolTx) {
-
-					wp.Submit(func() {
-
-						// Finally checking whether this tx is unstuck or not
-						// by doing nonce comparison
-						yes, err := tx.IsUnstuck(ctx, q.RPC)
-						if err != nil {
-
-							internalChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
-							return
-
-						}
-
-						if yes {
-							internalChan <- &TxStatus{Hash: tx.Hash, Status: UNSTUCK}
-						} else {
-							internalChan <- &TxStatus{Hash: tx.Hash, Status: STUCK}
-						}
-
-					})
-
-				}(txs[i])
+				if txs[i].Nonce == mined.Nonce+1 {
+					internalChan <- &TxStatus{Hash: txs[i].Hash, Status: UNSTUCK}
+				}
 
 			}
 

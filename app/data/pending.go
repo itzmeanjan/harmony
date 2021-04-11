@@ -364,14 +364,14 @@ func (p *PendingPool) Start(ctx context.Context) {
 // Prune - Remove confirmed/ dropped txs from pending pool
 //
 // @note This method is supposed to be run as independent go routine
-func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs) {
+func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.CaughtTxs, confirmedTxsChan chan ConfirmedTx) {
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking whether tx was dropped or not
 	wp := workerpool.New(config.GetConcurrencyFactor())
 	defer wp.Stop()
 
-	internalChan := make(chan *TxStatus, 1024)
+	internalChan := make(chan *TxStatus, 4096)
 	var droppedOrConfirmed uint64
 
 	for {
@@ -381,7 +381,7 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 		case <-ctx.Done():
 			return
 
-		case txs := <-commChan:
+		case txs := <-caughtTxsChan:
 
 			var prunables []*MemPoolTx = make([]*MemPoolTx, 0, len(txs))
 
@@ -436,6 +436,14 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 
 				prunables = append(prunables, _prunableLocal...)
 				alreadyAddedFromA[tx.From] = &_metadata
+
+			}
+
+			// Letting queued pool pruning worker know txs from
+			// these addresses with this nonce got mined in this block
+			for addr := range alreadyAddedFromA {
+
+				confirmedTxsChan <- ConfirmedTx{From: addr, Nonce: alreadyAddedFromA[addr].nonce}
 
 			}
 

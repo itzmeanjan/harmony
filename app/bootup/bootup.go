@@ -150,17 +150,18 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	// Block head listener & pending pool pruner
 	// talks over this buffered channel
-	commChan := make(chan listen.CaughtTxs, 1)
+	caughtTxsChan := make(chan listen.CaughtTxs, 16)
+	confirmedTxsChan := make(chan data.ConfirmedTx, 4096)
 
 	// Starting pool life cycle manager go routine
 	go pool.Pending.Start(ctx)
 	// (a)
-	go pool.Pending.Prune(ctx, commChan)
+	go pool.Pending.Prune(ctx, caughtTxsChan, confirmedTxsChan)
 	go pool.Queued.Start(ctx)
-	go pool.Queued.Prune(ctx)
+	go pool.Queued.Prune(ctx, confirmedTxsChan)
 	// Listens for new block headers & informs 👆 (a) for pruning
 	// txs which can be/ need to be
-	go listen.SubscribeHead(ctx, wsClient, commChan)
+	go listen.SubscribeHead(ctx, wsClient, caughtTxsChan)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
