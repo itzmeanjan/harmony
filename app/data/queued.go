@@ -20,21 +20,22 @@ import (
 // when next block is going to be picked, when these tx(s) are going to be
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
-	Transactions      map[common.Hash]*MemPoolTx
-	TxsFromAddress    map[common.Address]TxList
-	DroppedTxs        map[common.Hash]bool
-	AscTxsByGasPrice  TxList
-	DescTxsByGasPrice TxList
-	AddTxChan         chan AddRequest
-	RemoveTxChan      chan RemovedUnstuckTx
-	TxExistsChan      chan ExistsRequest
-	GetTxChan         chan GetRequest
-	CountTxsChan      chan CountRequest
-	ListTxsChan       chan ListRequest
-	TxsFromAChan      chan TxsFromARequest
-	PubSub            *redis.Client
-	RPC               *rpc.Client
-	PendingPool       *PendingPool
+	Transactions           map[common.Hash]*MemPoolTx
+	TxsFromAddress         map[common.Address]TxList
+	DroppedTxs             map[common.Hash]bool
+	AscTxsByGasPrice       TxList
+	DescTxsByGasPrice      TxList
+	AddTxChan              chan AddRequest
+	RemoveTxChan           chan RemovedUnstuckTx
+	AddedInPendingPoolChan chan common.Hash
+	TxExistsChan           chan ExistsRequest
+	GetTxChan              chan GetRequest
+	CountTxsChan           chan CountRequest
+	ListTxsChan            chan ListRequest
+	TxsFromAChan           chan TxsFromARequest
+	PubSub                 *redis.Client
+	RPC                    *rpc.Client
+	PendingPool            *PendingPool
 }
 
 // hasBeenAllocatedFor - Checking whether memory has been allocated
@@ -180,6 +181,16 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 			// if removed will return non-nil reference to removed tx
 			req.ResponseChan <- txRemover(req.Hash)
+
+		case txHash := <-q.AddedInPendingPoolChan:
+			// As this tx has been found to be added in pending pool
+			// it mustn't live on queued pool now
+			//
+			// @note This won't emit any Pub/Sub event
+
+			if tx, ok := q.Transactions[txHash]; ok {
+				removeTx(tx)
+			}
 
 		case req := <-q.TxExistsChan:
 

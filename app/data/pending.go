@@ -18,20 +18,21 @@ import (
 // PendingPool - Currently present pending tx(s) i.e. which are ready to
 // be mined in next block
 type PendingPool struct {
-	Transactions      map[common.Hash]*MemPoolTx
-	TxsFromAddress    map[common.Address]TxList
-	DroppedTxs        map[common.Hash]bool
-	AscTxsByGasPrice  TxList
-	DescTxsByGasPrice TxList
-	AddTxChan         chan AddRequest
-	RemoveTxChan      chan RemoveRequest
-	TxExistsChan      chan ExistsRequest
-	GetTxChan         chan GetRequest
-	CountTxsChan      chan CountRequest
-	ListTxsChan       chan ListRequest
-	TxsFromAChan      chan TxsFromARequest
-	PubSub            *redis.Client
-	RPC               *rpc.Client
+	Transactions             map[common.Hash]*MemPoolTx
+	TxsFromAddress           map[common.Address]TxList
+	DroppedTxs               map[common.Hash]bool
+	AscTxsByGasPrice         TxList
+	DescTxsByGasPrice        TxList
+	AddTxChan                chan AddRequest
+	RemoveTxChan             chan RemoveRequest
+	AlreadyInPendingPoolChan chan common.Hash
+	TxExistsChan             chan ExistsRequest
+	GetTxChan                chan GetRequest
+	CountTxsChan             chan CountRequest
+	ListTxsChan              chan ListRequest
+	TxsFromAChan             chan TxsFromARequest
+	PubSub                   *redis.Client
+	RPC                      *rpc.Client
 }
 
 // HasBeenAllocatedFor - Given an address from which tx was sent
@@ -152,6 +153,11 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		addTx(tx)
 		p.PublishAdded(ctx, p.PubSub, tx)
+
+		// Letting queued pool know, this tx is already added
+		// in pending pool, so it can be removed from queued pool
+		// if it's living there too
+		p.AlreadyInPendingPoolChan <- tx.Hash
 
 		return true
 
