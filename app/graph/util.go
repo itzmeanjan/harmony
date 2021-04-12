@@ -55,12 +55,11 @@ func toGraphQL(txs []*data.MemPoolTx) []*model.MemPoolTx {
 
 	res := make([]*model.MemPoolTx, 0, len(txs))
 
-	for _, tx := range txs {
-
-		res = append(res, tx.ToGraphQL())
-
+	for i := 0; i < len(txs); i++ {
+		res = append(res, txs[i].ToGraphQL())
 	}
 
+	data.CleanSlice(txs)
 	return res
 
 }

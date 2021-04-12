@@ -311,6 +311,8 @@ func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
 
 			}
 
+			CleanSlice(txs)
+
 		case txStat := <-internalChan:
 
 			if txStat.Status == UNSTUCK {
@@ -447,6 +449,7 @@ func (q *QueuedPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -495,6 +498,7 @@ func (q *QueuedPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 		return txs
 	}
 
+	CleanSlice(txs[x:])
 	return txs[:x]
 
 }
@@ -508,6 +512,7 @@ func (q *QueuedPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 		return txs
 	}
 
+	CleanSlice(txs[x:])
 	return txs[:x]
 
 }
@@ -574,6 +579,7 @@ func (q *QueuedPool) SentTo(address common.Address) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -635,6 +641,7 @@ func (q *QueuedPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -696,6 +703,7 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 

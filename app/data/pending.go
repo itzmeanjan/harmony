@@ -355,6 +355,9 @@ func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.Cau
 				prunables = append(prunables, _prunableLocal...)
 				alreadyAddedFromA[tx.From] = &_metadata
 
+				// Can be GC-ed
+				CleanSlice(_prunableLocal)
+
 			}
 
 			// Letting queued pool pruning worker know txs from
@@ -362,6 +365,9 @@ func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.Cau
 			for addr := range alreadyAddedFromA {
 				confirmedTxsChan <- ConfirmedTx{From: addr, Nonce: alreadyAddedFromA[addr].nonce}
 			}
+
+			// not required anymore, can be GC-ed
+			alreadyAddedFromA = nil
 
 			for i := 0; i < len(prunables); i++ {
 
@@ -386,6 +392,8 @@ func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.Cau
 				}(prunables[i])
 
 			}
+
+			CleanSlice(prunables)
 
 		case tx := <-internalChan:
 
@@ -508,6 +516,7 @@ func (p *PendingPool) Prunables(targetTx *MemPoolTx) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -584,6 +593,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -632,6 +642,7 @@ func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
 		return txs
 	}
 
+	CleanSlice(txs[x:])
 	return txs[:x]
 
 }
@@ -645,6 +656,7 @@ func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 		return txs
 	}
 
+	CleanSlice(txs[x:])
 	return txs[:x]
 
 }
@@ -711,6 +723,7 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -772,6 +785,7 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -833,6 +847,7 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 

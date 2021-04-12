@@ -115,3 +115,13 @@ func findTxFromSlice(txs []*MemPoolTx, tx *MemPoolTx) int {
 	return idx
 
 }
+
+// CleanSlice - When we're done using one slice of txs, it's better
+// to clean those up, so that it becomes eligible for GC
+func CleanSlice(txs []*MemPoolTx) {
+
+	for i := 0; i < len(txs); i++ {
+		txs[i] = nil
+	}
+
+}
