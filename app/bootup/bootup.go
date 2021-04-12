@@ -3,7 +3,6 @@ package bootup
 import (
 	"context"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -111,7 +110,6 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		DroppedTxs:        make(map[common.Hash]bool),
 		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
 		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
-		Lock:              &sync.RWMutex{},
 		AddTxChan:         make(chan data.AddRequest, 1),
 		RemoveTxChan:      make(chan data.RemoveRequest, 1),
 		TxExistsChan:      make(chan data.ExistsRequest, 1),
@@ -130,7 +128,6 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		DroppedTxs:        make(map[common.Hash]bool),
 		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetQueuedPoolSize()),
 		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetQueuedPoolSize()),
-		Lock:              &sync.RWMutex{},
 		AddTxChan:         make(chan data.AddRequest, 1),
 		RemoveTxChan:      make(chan data.RemovedUnstuckTx, 1),
 		TxExistsChan:      make(chan data.ExistsRequest, 1),

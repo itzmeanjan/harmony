@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -24,7 +23,6 @@ type PendingPool struct {
 	DroppedTxs        map[common.Hash]bool
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
-	Lock              *sync.RWMutex
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemoveRequest
 	TxExistsChan      chan ExistsRequest
@@ -85,34 +83,17 @@ func (p *PendingPool) Start(ctx context.Context) {
 	//
 	// @note Don't accept tx which are already dropped
 	needToDropTxs := func() bool {
-
-		p.Lock.RLock()
-		defer p.Lock.RUnlock()
-
 		return uint64(p.AscTxsByGasPrice.len())+1 > config.GetPendingPoolSize()
-
 	}
 
 	pickTxWithLowestGasPrice := func() *MemPoolTx {
-
-		p.Lock.RLock()
-		defer p.Lock.RUnlock()
-
 		return p.AscTxsByGasPrice.get()[0]
-
 	}
 
 	// Plain simple safe tx adding into pool, logic, invoke it from other section
 	//
 	// Don't rewrite this logic again
-	//
-	// @note Just make sure, you don't hold lock, when you call
-	// this
 	addTx := func(tx *MemPoolTx) {
-
-		// -- Safe writing, critical section begins
-		p.Lock.Lock()
-		defer p.Lock.Unlock()
 
 		p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
 		p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
@@ -122,14 +103,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 	}
 
 	// Plain simple remove tx logic, use it everywhere else
-	//
-	// @note Just make sure, you don't hold lock, when you call
-	// this
 	removeTx := func(tx *MemPoolTx) {
-
-		// -- Safe writing, critical section begins
-		p.Lock.Lock()
-		defer p.Lock.Unlock()
 
 		// Remove from sorted tx list, keep it sorted
 		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
@@ -156,21 +130,13 @@ func (p *PendingPool) Start(ctx context.Context) {
 	// Closure for safely adding new tx into pool
 	txAdder := func(tx *MemPoolTx) bool {
 
-		// -- Safe reading begins
-		p.Lock.RLock()
-
 		if _, ok := p.Transactions[tx.Hash]; ok {
-			p.Lock.RUnlock()
 			return false
 		}
 
 		if _, ok := p.DroppedTxs[tx.Hash]; ok {
-			p.Lock.RUnlock()
 			return false
 		}
-
-		p.Lock.RUnlock()
-		// -- reading ends
 
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
@@ -184,12 +150,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 		tx.PendingFrom = time.Now().UTC()
 		tx.Pool = "pending"
 
-		// Don't hold lock here, it'll be attempted to be acquired
-		// in called function
 		addTx(tx)
-
-		// After adding new tx in pending pool, also attempt to
-		// publish it to pubsub topic
 		p.PublishAdded(ctx, p.PubSub, tx)
 
 		return true
@@ -202,19 +163,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 	// This is extracted out here, for ease of usability
 	txRemover := func(txStat *TxStatus) bool {
 
-		// -- Safe reading, begins
-		p.Lock.RLock()
-
 		tx, ok := p.Transactions[txStat.Hash]
 		if !ok {
-
-			p.Lock.RUnlock()
 			return false
-
 		}
-
-		p.Lock.RUnlock()
-		// -- reading ends
 
 		// Tx got confirmed/ dropped, to be used when computing
 		// how long it spent in pending pool
@@ -228,11 +180,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 			tx.ConfirmedAt = time.Now().UTC()
 		}
 
-		// Don't hold lock here, it'll be attempted to be acquired
-		// in called function
 		removeTx(tx)
-
-		// Publishing this confirmed/ dropped tx
 		p.PublishRemoved(ctx, p.PubSub, tx)
 
 		return true
@@ -256,54 +204,29 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.TxExistsChan:
 
-			// -- Safe reading begins
-			p.Lock.RLock()
-
 			_, ok := p.Transactions[req.Tx]
-
-			p.Lock.RUnlock()
-			// -- ends
-
 			req.ResponseChan <- ok
 
 		case req := <-p.GetTxChan:
 
-			// -- Safe reading begins
-			p.Lock.RLock()
-
 			if tx, ok := p.Transactions[req.Tx]; ok {
 				req.ResponseChan <- tx
-
-				p.Lock.RUnlock()
 				break
 			}
-
-			p.Lock.RUnlock()
-			// -- ends
 
 			req.ResponseChan <- nil
 
 		case req := <-p.CountTxsChan:
 
-			// -- Safe reading begins
-			p.Lock.RLock()
-
 			req.ResponseChan <- uint64(p.AscTxsByGasPrice.len())
-
-			p.Lock.RUnlock()
-			// -- ends
 
 		case req := <-p.ListTxsChan:
 
 			if req.Order == ASC {
-				// -- Safe reading begins
-				p.Lock.RLock()
 
 				// If empty, just return nil
 				if p.AscTxsByGasPrice.len() == 0 {
 					req.ResponseChan <- nil
-
-					p.Lock.RUnlock()
 					break
 				}
 
@@ -311,21 +234,15 @@ func (p *PendingPool) Start(ctx context.Context) {
 				copy(copied, p.AscTxsByGasPrice.get())
 
 				req.ResponseChan <- copied
-
-				p.Lock.RUnlock()
-				// -- ends
 				break
+
 			}
 
 			if req.Order == DESC {
-				// -- Safe reading begins
-				p.Lock.RLock()
 
 				// If empty, just return nil
 				if p.DescTxsByGasPrice.len() == 0 {
 					req.ResponseChan <- nil
-
-					p.Lock.RUnlock()
 					break
 				}
 
@@ -334,8 +251,6 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 				req.ResponseChan <- copied
 
-				p.Lock.RUnlock()
-				// -- ends
 			}
 
 		case req := <-p.TxsFromAChan:

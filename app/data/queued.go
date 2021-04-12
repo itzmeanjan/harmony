@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,7 +25,6 @@ type QueuedPool struct {
 	DroppedTxs        map[common.Hash]bool
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
-	Lock              *sync.RWMutex
 	AddTxChan         chan AddRequest
 	RemoveTxChan      chan RemovedUnstuckTx
 	TxExistsChan      chan ExistsRequest
@@ -81,30 +79,16 @@ func (q *QueuedPool) Start(ctx context.Context) {
 	//
 	// @note Don't accept tx which are already dropped
 	needToDropTxs := func() bool {
-
-		q.Lock.RLock()
-		defer q.Lock.RUnlock()
-
 		return uint64(q.AscTxsByGasPrice.len())+1 > config.GetQueuedPoolSize()
-
 	}
 
 	pickTxWithLowestGasPrice := func() *MemPoolTx {
-
-		q.Lock.RLock()
-		defer q.Lock.RUnlock()
-
 		return q.AscTxsByGasPrice.get()[0]
-
 	}
 
 	// For adding new tx into queued pool, always
 	// invoke this closure
 	addTx := func(tx *MemPoolTx) {
-
-		// -- Critical section of code 👇
-		q.Lock.Lock()
-		defer q.Lock.Unlock()
 
 		q.AscTxsByGasPrice = Insert(q.AscTxsByGasPrice, tx)
 		q.DescTxsByGasPrice = Insert(q.DescTxsByGasPrice, tx)
@@ -115,13 +99,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 	// Plain simple tx removing logic. Rather than rewriting
 	// same logic in multiple places, consider using this one
-	//
-	// @note Don't hold lock when invoking this method
 	removeTx := func(tx *MemPoolTx) {
-
-		// -- Safe writing, critical section begins
-		q.Lock.Lock()
-		defer q.Lock.Unlock()
 
 		// Remove from sorted tx list, keep it sorted
 		q.AscTxsByGasPrice = Remove(q.AscTxsByGasPrice, tx)
@@ -145,21 +123,13 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 	txAdder := func(tx *MemPoolTx) bool {
 
-		// -- Safe reading begins
-		q.Lock.RLock()
-
 		if _, ok := q.Transactions[tx.Hash]; ok {
-			q.Lock.RUnlock()
 			return false
 		}
 
 		if _, ok := q.DroppedTxs[tx.Hash]; ok {
-			q.Lock.RUnlock()
 			return false
 		}
-
-		q.Lock.RUnlock()
-		// -- ends here
 
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
@@ -174,9 +144,6 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		tx.Pool = "queued"
 
 		addTx(tx)
-
-		// As soon as we find new entry for queued pool
-		// we publish that tx to pubsub topic
 		q.PublishAdded(ctx, q.PubSub, tx)
 
 		return true
@@ -185,26 +152,14 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 	txRemover := func(txHash common.Hash) *MemPoolTx {
 
-		// -- Safely reading from map, begins
-		q.Lock.RLock()
-
 		tx, ok := q.Transactions[txHash]
 		if !ok {
-
-			q.Lock.RUnlock()
 			return nil
-
 		}
-
-		q.Lock.RUnlock()
-		// -- reading ends
 
 		tx.UnstuckAt = time.Now().UTC()
 
 		removeTx(tx)
-
-		// Publishing unstuck tx, this is probably going to
-		// enter pending pool now
 		q.PublishRemoved(ctx, q.PubSub, q.Transactions[txHash])
 
 		return tx
@@ -228,54 +183,29 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 		case req := <-q.TxExistsChan:
 
-			// -- Attempt to read safely, begins
-			q.Lock.RLock()
-
 			_, ok := q.Transactions[req.Tx]
-
-			q.Lock.RUnlock()
-			// -- ends here
-
 			req.ResponseChan <- ok
 
 		case req := <-q.GetTxChan:
 
-			// -- Safe reading, begins
-			q.Lock.RLock()
-
 			if tx, ok := q.Transactions[req.Tx]; ok {
 				req.ResponseChan <- tx
-
-				q.Lock.RUnlock()
 				break
 			}
-
-			q.Lock.RUnlock()
-			// -- ends here
 
 			req.ResponseChan <- nil
 
 		case req := <-q.CountTxsChan:
 
-			// -- Safe reading starting here
-			q.Lock.RLock()
-
 			req.ResponseChan <- uint64(q.AscTxsByGasPrice.len())
-
-			q.Lock.RUnlock()
-			// -- ending here
 
 		case req := <-q.ListTxsChan:
 
 			if req.Order == ASC {
-				// -- Safe reading starting here
-				q.Lock.RLock()
 
 				// If empty, just return nil
 				if q.AscTxsByGasPrice.len() == 0 {
 					req.ResponseChan <- nil
-
-					q.Lock.RUnlock()
 					break
 				}
 
@@ -283,21 +213,15 @@ func (q *QueuedPool) Start(ctx context.Context) {
 				copy(copied, q.AscTxsByGasPrice.get())
 
 				req.ResponseChan <- copied
-
-				q.Lock.RUnlock()
-				// -- ending here
 				break
+
 			}
 
 			if req.Order == DESC {
-				// -- Safe reading starting here
-				q.Lock.RLock()
 
 				// If empty, just return nil
 				if q.DescTxsByGasPrice.len() == 0 {
 					req.ResponseChan <- nil
-
-					q.Lock.RUnlock()
 					break
 				}
 
@@ -306,8 +230,6 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 				req.ResponseChan <- copied
 
-				q.Lock.RUnlock()
-				// -- ending here
 			}
 
 		case req := <-q.TxsFromAChan:
