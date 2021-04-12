@@ -358,7 +358,14 @@ func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
 			return
 
 		case mined := <-commChan:
-
+			// As soon as we learn a new tx got mined
+			// for which we've received txfrom & respective nonce
+			// we'll attempt to find out how many txs from same address
+			// currently live in queued pool
+			//
+			// If any, we'll attempt to go through all of those & see any of them
+			// unstuck or not, if yes we're going to attempt to mark it as
+			// unstuck
 			txs := q.TxsFromA(mined.From)
 			if txs == nil {
 				break
@@ -366,10 +373,18 @@ func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
 
 			for i := 0; i < len(txs); i++ {
 
-				// This tx is unstuck now, because tx with
-				// nonce just below it got mined in latest block
-				if txs[i].Nonce == mined.Nonce+1 {
+				yes, err := txs[i].IsUnstuck(ctx, q.RPC)
+				if err != nil {
+
+					internalChan <- &TxStatus{Hash: txs[i].Hash, Status: STUCK}
+					return
+
+				}
+
+				if yes {
 					internalChan <- &TxStatus{Hash: txs[i].Hash, Status: UNSTUCK}
+				} else {
+					internalChan <- &TxStatus{Hash: txs[i].Hash, Status: STUCK}
 				}
 
 			}

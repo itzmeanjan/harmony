@@ -445,9 +445,7 @@ func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.Cau
 			// Letting queued pool pruning worker know txs from
 			// these addresses with this nonce got mined in this block
 			for addr := range alreadyAddedFromA {
-
 				confirmedTxsChan <- ConfirmedTx{From: addr, Nonce: alreadyAddedFromA[addr].nonce}
-
 			}
 
 			for i := 0; i < len(prunables); i++ {
