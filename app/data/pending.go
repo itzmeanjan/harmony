@@ -612,7 +612,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		return nil
 	}
 
-	txs := p.DescListTxs()
+	txs := p.TxsFromA(targetTx.From)
 	if txs == nil {
 		return nil
 	}
@@ -621,9 +621,13 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
 
-	// Attempting to concurrently checking which txs are duplicate
-	// of a given tx hash
-	wp := workerpool.New(runtime.NumCPU())
+	var wp *workerpool.WorkerPool
+
+	if txCount > uint64(runtime.NumCPU()) {
+		wp = workerpool.New(runtime.NumCPU())
+	} else {
+		wp = workerpool.New(int(txCount))
+	}
 
 	for i := 0; i < len(txs); i++ {
 
@@ -645,9 +649,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 	}
 
 	var received uint64
-	mustReceive := txCount
 
-	// Waiting for all go routines to finish
 	for v := range commChan {
 
 		if v != nil {
@@ -655,7 +657,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		}
 
 		received++
-		if received >= mustReceive {
+		if received >= txCount {
 			break
 		}
 
@@ -720,62 +722,7 @@ func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
 // SentFrom - Returns a list of pending tx(s) sent from
 // specified address
 func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
-
-	txs := p.DescListTxs()
-	if txs == nil {
-		return nil
-	}
-
-	txCount := uint64(len(txs))
-	commChan := make(chan *MemPoolTx, txCount)
-	result := make([]*MemPoolTx, 0, txCount)
-
-	wp := workerpool.New(runtime.NumCPU())
-
-	for i := 0; i < len(txs); i++ {
-
-		func(tx *MemPoolTx) {
-
-			wp.Submit(func() {
-
-				if tx.IsSentFrom(address) {
-					commChan <- tx
-					return
-				}
-
-				commChan <- nil
-
-			})
-
-		}(txs[i])
-
-	}
-
-	var received uint64
-	mustReceive := txCount
-
-	// Waiting for all go routines to finish
-	for v := range commChan {
-
-		if v != nil {
-			result = append(result, v)
-		}
-
-		received++
-		if received >= mustReceive {
-			break
-		}
-
-	}
-
-	// This call is irrelevant here, probably, but still being made
-	//
-	// Because all workers have exited, otherwise we could have never
-	// reached this point
-	wp.Stop()
-
-	return result
-
+	return p.TxsFromA(address)
 }
 
 // SentTo - Returns a list of pending tx(s) sent to
