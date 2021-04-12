@@ -20,22 +20,21 @@ import (
 // when next block is going to be picked, when these tx(s) are going to be
 // moved to pending pool, only they can be considered before mining
 type QueuedPool struct {
-	Transactions           map[common.Hash]*MemPoolTx
-	TxsFromAddress         map[common.Address]TxList
-	DroppedTxs             map[common.Hash]bool
-	AscTxsByGasPrice       TxList
-	DescTxsByGasPrice      TxList
-	AddTxChan              chan AddRequest
-	RemoveTxChan           chan RemovedUnstuckTx
-	AddedInPendingPoolChan chan common.Hash
-	TxExistsChan           chan ExistsRequest
-	GetTxChan              chan GetRequest
-	CountTxsChan           chan CountRequest
-	ListTxsChan            chan ListRequest
-	TxsFromAChan           chan TxsFromARequest
-	PubSub                 *redis.Client
-	RPC                    *rpc.Client
-	PendingPool            *PendingPool
+	Transactions      map[common.Hash]*MemPoolTx
+	TxsFromAddress    map[common.Address]TxList
+	DroppedTxs        map[common.Hash]bool
+	AscTxsByGasPrice  TxList
+	DescTxsByGasPrice TxList
+	AddTxChan         chan AddRequest
+	RemoveTxChan      chan RemovedUnstuckTx
+	TxExistsChan      chan ExistsRequest
+	GetTxChan         chan GetRequest
+	CountTxsChan      chan CountRequest
+	ListTxsChan       chan ListRequest
+	TxsFromAChan      chan TxsFromARequest
+	PubSub            *redis.Client
+	RPC               *rpc.Client
+	PendingPool       *PendingPool
 }
 
 // hasBeenAllocatedFor - Checking whether memory has been allocated
@@ -182,12 +181,9 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			// if removed will return non-nil reference to removed tx
 			req.ResponseChan <- txRemover(req.Hash)
 
-		case txHash := <-q.AddedInPendingPoolChan:
-			// As this tx has been found to be added in pending pool
-			// it mustn't live on queued pool now
-			if tx, ok := q.Transactions[txHash]; ok {
-				dropTx(tx)
-			}
+			// Marking that tx has been dropped, so that
+			// it won't get picked up next time
+			q.DroppedTxs[req.Hash] = true
 
 		case req := <-q.TxExistsChan:
 
@@ -269,7 +265,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 // attempt to place them in pending pool, if not present already
 //
 // @note Start this method as an independent go routine
-func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
+func (q *QueuedPool) Prune(ctx context.Context, confirmedTxsChan chan ConfirmedTx, pendingTxsChan chan *MemPoolTx) {
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking whether tx has been unstuck or not
@@ -287,7 +283,7 @@ func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
 		case <-ctx.Done():
 			return
 
-		case mined := <-commChan:
+		case mined := <-confirmedTxsChan:
 			// As soon as we learn a new tx got mined
 			// for which we've received txfrom & respective nonce
 			// we'll attempt to find out how many txs from same address
@@ -302,10 +298,28 @@ func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
 			}
 
 			noGap := UntilNonceGap(txs, mined.Nonce)
+
 			for i := 0; i < len(noGap); i++ {
-
 				internalChan <- &TxStatus{Hash: noGap[i].Hash, Status: UNSTUCK}
+			}
 
+			CleanSlice(txs)
+			CleanSlice(noGap)
+
+		case pending := <-pendingTxsChan:
+			// This new tx was added into pending pool
+			// and pending pool is letting us know about it so that
+			// we can remove all nonce gapless txs, sent from this user
+
+			txs := q.TxsFromA(pending.From)
+			if txs == nil {
+				break
+			}
+
+			noGap := UntilNonceGap(txs, pending.Nonce)
+
+			for i := 0; i < len(noGap); i++ {
+				internalChan <- &TxStatus{Hash: noGap[i].Hash, Status: UNSTUCK}
 			}
 
 			CleanSlice(txs)

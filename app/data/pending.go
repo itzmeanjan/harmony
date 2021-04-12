@@ -24,8 +24,9 @@ type PendingPool struct {
 	AscTxsByGasPrice         TxList
 	DescTxsByGasPrice        TxList
 	AddTxChan                chan AddRequest
+	AddFromQueuedPoolChan    chan AddRequest
 	RemoveTxChan             chan RemoveRequest
-	AlreadyInPendingPoolChan chan common.Hash
+	AlreadyInPendingPoolChan chan *MemPoolTx
 	TxExistsChan             chan ExistsRequest
 	GetTxChan                chan GetRequest
 	CountTxsChan             chan CountRequest
@@ -154,11 +155,6 @@ func (p *PendingPool) Start(ctx context.Context) {
 		addTx(tx)
 		p.PublishAdded(ctx, p.PubSub, tx)
 
-		// Letting queued pool know, this tx is already added
-		// in pending pool, so it can be removed from queued pool
-		// if it's living there too
-		p.AlreadyInPendingPoolChan <- tx.Hash
-
 		return true
 
 	}
@@ -201,6 +197,15 @@ func (p *PendingPool) Start(ctx context.Context) {
 			return
 
 		case req := <-p.AddTxChan:
+
+			req.ResponseChan <- txAdder(req.Tx)
+
+			// Letting queued pool know, this tx is already added
+			// in pending pool, so it can be removed from queued pool
+			// if it's living there too
+			p.AlreadyInPendingPoolChan <- req.Tx
+
+		case req := <-p.AddFromQueuedPoolChan:
 
 			req.ResponseChan <- txAdder(req.Tx)
 
@@ -874,6 +879,19 @@ func (p *PendingPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
 }
 
+// AddUnstuck - When attempting to add new tx from queued pool to here
+// it's supposed to be invoked so that queued pool doesn't receive notification
+// back to self for so
+func (p *PendingPool) AddUnstuck(ctx context.Context, tx *MemPoolTx) bool {
+
+	respChan := make(chan bool)
+
+	p.AddFromQueuedPoolChan <- AddRequest{Tx: tx, ResponseChan: respChan}
+
+	return <-respChan
+
+}
+
 // VerifiedAdd - Before adding tx from queued pool, just check do we
 // really need to add this tx in pending pool i.e. is this tx really
 // pending ?
@@ -888,7 +906,7 @@ func (p *PendingPool) VerifiedAdd(ctx context.Context, tx *MemPoolTx) bool {
 		return false
 	}
 
-	return p.Add(ctx, tx)
+	return p.AddUnstuck(ctx, tx)
 
 }
 
