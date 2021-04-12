@@ -1,5 +1,7 @@
 package data
 
+import "github.com/ethereum/go-ethereum/common/hexutil"
+
 type TxList interface {
 	len() int
 	cap() int
@@ -124,4 +126,27 @@ func CleanSlice(txs []*MemPoolTx) {
 		txs[i] = nil
 	}
 
+}
+
+// UntilNonceGap - Returns subslice of txs, where no nonce-gap exists
+// for `> nonce + 1`
+func UntilNonceGap(txs []*MemPoolTx, nonce hexutil.Uint64) []*MemPoolTx {
+	result := make([]*MemPoolTx, 0, len(txs))
+
+	for i := 0; i < len(txs); i++ {
+
+		if txs[i].Nonce <= nonce+1 {
+			result = append(result, txs[i])
+			continue
+		}
+
+		if txs[i].Nonce-txs[i-1].Nonce > 1 {
+			break
+		}
+
+		result = append(result, txs[i])
+
+	}
+
+	return result
 }
