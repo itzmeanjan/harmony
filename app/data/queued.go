@@ -301,25 +301,15 @@ func (q *QueuedPool) Prune(ctx context.Context, commChan chan ConfirmedTx) {
 				break
 			}
 
-			for i := 0; i < len(txs); i++ {
+			noGap := UntilNonceGap(txs, mined.Nonce)
+			for i := 0; i < len(noGap); i++ {
 
-				// We learnt last tx mined from `mined.From` was with nonce
-				// `mined.Nonce`, we're expecting there might be some tx living
-				// in queued pool with nonce +1 than that, which is now eligible to
-				// be made unstuck & we're attempting that below
-				//
-				// We could have just checked `txs[i].Nonce == mined.Nonce + 1`, but
-				// just to be sure, if any tx lower nonce still living in this part of pool
-				// we're checking with `<=`, which is perfectly ok & doesn't harm
-				//
-				// @note As far as I understand the mempool behaviour 👆
-				if txs[i].Nonce <= (mined.Nonce + 1) {
-					internalChan <- &TxStatus{Hash: txs[i].Hash, Status: UNSTUCK}
-				}
+				internalChan <- &TxStatus{Hash: noGap[i].Hash, Status: UNSTUCK}
 
 			}
 
 			CleanSlice(txs)
+			CleanSlice(noGap)
 
 		case txStat := <-internalChan:
 
