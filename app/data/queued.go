@@ -163,7 +163,10 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
-			log.Printf("🧹 Dropped queued tx, was about to hit limit\n")
+
+			if len(q.DroppedTxs)%10 == 0 {
+				log.Printf("🧹 Dropped 10 queued txs, was about to hit limit\n")
+			}
 		}
 
 		// Marking we found this tx in mempool now

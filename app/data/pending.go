@@ -174,7 +174,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
-			log.Printf("🧹 Dropped pending tx, was about to hit limit\n")
+
+			if len(p.DroppedTxs)%10 == 0 {
+				log.Printf("🧹 Dropped 10 pending txs, was about to hit limit\n")
+			}
 		}
 
 		// Marking we found this tx in mempool now
