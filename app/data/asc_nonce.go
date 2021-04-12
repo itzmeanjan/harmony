@@ -59,8 +59,8 @@ func (t TxsFromAddressAsc) findTx(low int, high int, tx *MemPoolTx) int {
 
 	if low == high {
 
-		if t[low].Hash == tx.Hash {
-			return low
+		if idx := findTxFromSlice(t[low:], tx); idx != -1 {
+			return low + idx
 		}
 
 		return -1
