@@ -185,11 +185,8 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		case txHash := <-q.AddedInPendingPoolChan:
 			// As this tx has been found to be added in pending pool
 			// it mustn't live on queued pool now
-			//
-			// @note This won't emit any Pub/Sub event
-
 			if tx, ok := q.Transactions[txHash]; ok {
-				removeTx(tx)
+				dropTx(tx)
 			}
 
 		case req := <-q.TxExistsChan:
