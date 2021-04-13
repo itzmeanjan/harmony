@@ -21,6 +21,7 @@ type PendingPool struct {
 	Transactions             map[common.Hash]*MemPoolTx
 	TxsFromAddress           map[common.Address]TxList
 	DroppedTxs               map[common.Hash]bool
+	RemovedTxs               map[common.Hash]bool
 	AscTxsByGasPrice         TxList
 	DescTxsByGasPrice        TxList
 	AddTxChan                chan AddRequest
@@ -140,6 +141,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 			return false
 		}
 
+		if _, ok := p.RemovedTxs[tx.Hash]; ok {
+			return false
+		}
+
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
 
@@ -198,12 +203,16 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.AddTxChan:
 
-			req.ResponseChan <- txAdder(req.Tx)
+			added := txAdder(req.Tx)
+			req.ResponseChan <- added
 
-			// Letting queued pool know, this tx is already added
-			// in pending pool, so it can be removed from queued pool
-			// if it's living there too
-			p.AlreadyInPendingPoolChan <- req.Tx
+			// @note Only if added successfully
+			if added {
+				// Letting queued pool know, this tx is already added
+				// in pending pool, so it can be removed from queued pool
+				// if it's living there too
+				p.AlreadyInPendingPoolChan <- req.Tx
+			}
 
 		case req := <-p.AddFromQueuedPoolChan:
 
@@ -212,6 +221,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 		case req := <-p.RemoveTxChan:
 
 			req.ResponseChan <- txRemover(req.TxStat)
+
+			// Marking that tx has been removed, so that
+			// it won't get picked up next time
+			p.RemovedTxs[req.TxStat.Hash] = true
 
 		case req := <-p.TxExistsChan:
 

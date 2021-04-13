@@ -23,6 +23,7 @@ type QueuedPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
 	TxsFromAddress    map[common.Address]TxList
 	DroppedTxs        map[common.Hash]bool
+	RemovedTxs        map[common.Hash]bool
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	AddTxChan         chan AddRequest
@@ -131,6 +132,10 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			return false
 		}
 
+		if _, ok := q.RemovedTxs[tx.Hash]; ok {
+			return false
+		}
+
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
 
@@ -181,9 +186,9 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			// if removed will return non-nil reference to removed tx
 			req.ResponseChan <- txRemover(req.Hash)
 
-			// Marking that tx has been dropped, so that
+			// Marking that tx has been removed, so that
 			// it won't get picked up next time
-			q.DroppedTxs[req.Hash] = true
+			q.RemovedTxs[req.Hash] = true
 
 		case req := <-q.TxExistsChan:
 

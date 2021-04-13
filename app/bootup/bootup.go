@@ -106,13 +106,14 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// This is communication channel to be used between pending pool
 	// & queued pool, so that when new tx gets added into pending pool
 	// queued pool also gets notified & gets to update state if required
-	alreadyInPendingPoolChan := make(chan *data.MemPoolTx, 1024)
+	alreadyInPendingPoolChan := make(chan *data.MemPoolTx, 4096)
 
 	// initialising pending pool
 	pendingPool := &data.PendingPool{
 		Transactions:             make(map[common.Hash]*data.MemPoolTx),
 		TxsFromAddress:           make(map[common.Address]data.TxList),
 		DroppedTxs:               make(map[common.Hash]bool),
+		RemovedTxs:               make(map[common.Hash]bool),
 		AscTxsByGasPrice:         make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
 		DescTxsByGasPrice:        make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
 		AddTxChan:                make(chan data.AddRequest, 1),
@@ -133,6 +134,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		Transactions:      make(map[common.Hash]*data.MemPoolTx),
 		TxsFromAddress:    make(map[common.Address]data.TxList),
 		DroppedTxs:        make(map[common.Hash]bool),
+		RemovedTxs:        make(map[common.Hash]bool),
 		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetQueuedPoolSize()),
 		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetQueuedPoolSize()),
 		AddTxChan:         make(chan data.AddRequest, 1),
