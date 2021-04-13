@@ -74,6 +74,8 @@ During my journey of exploring Ethereum MemPool, I found good initiative from [B
 
 ![architecture](./sc/architecture.jpg)
 
+![internals](./sc/internals.jpg)
+
 ## Prerequisite
 
 - Make sure you've _`Go ( >= 1.16)`_, _`make`_ installed
@@ -102,6 +104,8 @@ touch .env
 RPCUrl=https://<rpc-node>
 WSUrl=wss://<rpc-node>
 MemPoolPollingPeriod=1000
+PendingPoolSize=4096
+QueuedPoolSize=4096
 PendingTxEntryTopic=pending_pool_entry
 PendingTxExitTopic=pending_pool_exit
 QueuedTxEntryTopic=queued_pool_entry
@@ -119,6 +123,8 @@ Environment Variable | Interpretation
 RPCUrl | `txpool` RPC API enabled Ethereum Node's URI
 WSUrl | To be used for listening to newly mined block headers
 MemPoolPollingPeriod | RPC node's mempool to be checked every `X` milliseconds
+PendingPoolSize | #-of pending tx(s) to be kept in-memory at a time
+QueuedPoolSize | #-of queued tx(s) to be kept in-memory at a time
 PendingTxEntryTopic | Whenever tx enters pending pool, it'll be published on Redis topic `t`
 PendingTxExitTopic | Whenever tx leaves pending pool, it'll be published on Redis topic `t`
 QueuedTxEntryTopic | Whenever tx enters queued pool, it'll be published on Redis topic `t`
@@ -129,6 +135,8 @@ RedisPassword | Authentication details for talking to Redis. **[ Not mandatory ]
 RedisDB | Redis database to be used. **[ By default there're 16 of them ]**
 ConcurrencyFactor | Whenever concurrency can be leveraged, `harmony` will create worker pool with `#-of logical CPUs x ConcurrencyFactor` go routines. **[ Can be float too ]**
 Port | Starts HTTP server on this port ( > 1024 )
+
+> Note : When pool size exceeds, tx with lowest gas price paid to be dropped
 
 ---
 
