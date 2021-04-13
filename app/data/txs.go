@@ -140,6 +140,10 @@ func UntilNonceGap(txs []*MemPoolTx, nonce hexutil.Uint64) []*MemPoolTx {
 			continue
 		}
 
+		if i == 0 && txs[i].Nonce-nonce > 1 {
+			break
+		}
+
 		if txs[i].Nonce-txs[i-1].Nonce > 1 {
 			break
 		}
