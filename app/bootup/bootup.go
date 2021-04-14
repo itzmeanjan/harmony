@@ -3,7 +3,6 @@ package bootup
 import (
 	"context"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -104,36 +103,47 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
+	// This is communication channel to be used between pending pool
+	// & queued pool, so that when new tx gets added into pending pool
+	// queued pool also gets notified & gets to update state if required
+	alreadyInPendingPoolChan := make(chan *data.MemPoolTx, 4096)
+
 	// initialising pending pool
 	pendingPool := &data.PendingPool{
-		Transactions:      make(map[common.Hash]*data.MemPoolTx),
-		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
-		Lock:              &sync.RWMutex{},
-		IsPruning:         false,
-		AddTxChan:         make(chan data.AddRequest, 1),
-		RemoveTxChan:      make(chan data.RemoveRequest, 1),
-		TxExistsChan:      make(chan data.ExistsRequest, 1),
-		GetTxChan:         make(chan data.GetRequest, 1),
-		CountTxsChan:      make(chan data.CountRequest, 1),
-		ListTxsChan:       make(chan data.ListRequest, 1),
-		PubSub:            _redis,
-		RPC:               client,
+		Transactions:             make(map[common.Hash]*data.MemPoolTx),
+		TxsFromAddress:           make(map[common.Address]data.TxList),
+		DroppedTxs:               make(map[common.Hash]bool),
+		RemovedTxs:               make(map[common.Hash]bool),
+		AscTxsByGasPrice:         make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
+		DescTxsByGasPrice:        make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
+		AddTxChan:                make(chan data.AddRequest, 1),
+		AddFromQueuedPoolChan:    make(chan data.AddRequest, 1),
+		RemoveTxChan:             make(chan data.RemoveRequest, 1),
+		AlreadyInPendingPoolChan: alreadyInPendingPoolChan,
+		TxExistsChan:             make(chan data.ExistsRequest, 1),
+		GetTxChan:                make(chan data.GetRequest, 1),
+		CountTxsChan:             make(chan data.CountRequest, 1),
+		ListTxsChan:              make(chan data.ListRequest, 1),
+		TxsFromAChan:             make(chan data.TxsFromARequest, 1),
+		PubSub:                   _redis,
+		RPC:                      client,
 	}
 
 	// initialising queued pool
 	queuedPool := &data.QueuedPool{
 		Transactions:      make(map[common.Hash]*data.MemPoolTx),
-		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, 1024),
-		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, 1024),
-		Lock:              &sync.RWMutex{},
-		IsPruning:         false,
+		TxsFromAddress:    make(map[common.Address]data.TxList),
+		DroppedTxs:        make(map[common.Hash]bool),
+		RemovedTxs:        make(map[common.Hash]bool),
+		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetQueuedPoolSize()),
+		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetQueuedPoolSize()),
 		AddTxChan:         make(chan data.AddRequest, 1),
 		RemoveTxChan:      make(chan data.RemovedUnstuckTx, 1),
 		TxExistsChan:      make(chan data.ExistsRequest, 1),
 		GetTxChan:         make(chan data.GetRequest, 1),
 		CountTxsChan:      make(chan data.CountRequest, 1),
 		ListTxsChan:       make(chan data.ListRequest, 1),
+		TxsFromAChan:      make(chan data.TxsFromARequest, 1),
 		PubSub:            _redis,
 		RPC:               client,
 		PendingPool:       pendingPool,
@@ -146,17 +156,22 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 
 	// Block head listener & pending pool pruner
 	// talks over this buffered channel
-	commChan := make(chan listen.CaughtTxs, 1024)
+	caughtTxsChan := make(chan listen.CaughtTxs, 16)
+	confirmedTxsChan := make(chan data.ConfirmedTx, 4096)
 
 	// Starting pool life cycle manager go routine
 	go pool.Pending.Start(ctx)
 	// (a)
-	go pool.Pending.Prune(ctx, commChan)
+	//
+	// After that this pool will also let (b) know that it can
+	// update state of txs, which have become unstuck
+	go pool.Pending.Prune(ctx, caughtTxsChan, confirmedTxsChan)
 	go pool.Queued.Start(ctx)
-	go pool.Queued.Prune(ctx)
+	// (b)
+	go pool.Queued.Prune(ctx, confirmedTxsChan, alreadyInPendingPoolChan)
 	// Listens for new block headers & informs 👆 (a) for pruning
 	// txs which can be/ need to be
-	go listen.SubscribeHead(ctx, wsClient, commChan)
+	go listen.SubscribeHead(ctx, wsClient, caughtTxsChan)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {

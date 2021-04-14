@@ -48,15 +48,33 @@ func GetBool(key string) bool {
 // 1000ms & again get to work
 func GetMemPoolPollingPeriod() uint64 {
 
-	period := Get("MemPoolPollingPeriod")
-
-	_period, err := strconv.ParseUint(period, 10, 64)
-	if err != nil {
-		log.Printf("[❗️] Failed to parse mempool polling period : `%s`, using 1000 ms\n", err.Error())
-		return 1000
+	if period := GetUint("MemPoolPollingPeriod"); period != 0 {
+		return period
 	}
 
-	return _period
+	return 1000
+
+}
+
+// GetPendingPoolSize - Max #-of pending pool txs can be living in memory
+func GetPendingPoolSize() uint64 {
+
+	if size := GetUint("PendingPoolSize"); size != 0 {
+		return size
+	}
+
+	return 1024
+
+}
+
+// GetQueuedPoolSize - Max #-of queued pool txs can be living in memory
+func GetQueuedPoolSize() uint64 {
+
+	if size := GetUint("QueuedPoolSize"); size != 0 {
+		return size
+	}
+
+	return 1024
 
 }
 

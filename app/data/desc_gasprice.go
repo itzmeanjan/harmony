@@ -60,12 +60,11 @@ func (m MemPoolTxsDesc) findTx(low int, high int, tx *MemPoolTx) int {
 
 	if low == high {
 
-		idx := findTxFromSlice(m[low:], tx)
-		if idx == -1 {
-			return -1
+		if idx := findTxFromSlice(m[low:], tx); idx != -1 {
+			return low + idx
 		}
 
-		return low + idx
+		return -1
 
 	}
 

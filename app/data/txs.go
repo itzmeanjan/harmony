@@ -1,5 +1,7 @@
 package data
 
+import "github.com/ethereum/go-ethereum/common/hexutil"
+
 type TxList interface {
 	len() int
 	cap() int
@@ -31,6 +33,8 @@ func Insert(txs TxList, tx *MemPoolTx) TxList {
 			return (MemPoolTxsAsc)(_txs)
 		case MemPoolTxsDesc:
 			return (MemPoolTxsDesc)(_txs)
+		case TxsFromAddressAsc:
+			return (TxsFromAddressAsc)(_txs)
 		default:
 			return nil
 
@@ -55,6 +59,8 @@ func Insert(txs TxList, tx *MemPoolTx) TxList {
 		return (MemPoolTxsAsc)(_txs)
 	case MemPoolTxsDesc:
 		return (MemPoolTxsDesc)(_txs)
+	case TxsFromAddressAsc:
+		return (TxsFromAddressAsc)(_txs)
 	default:
 		return nil
 
@@ -82,6 +88,8 @@ func Remove(txs TxList, tx *MemPoolTx) TxList {
 		return (MemPoolTxsAsc)(_txs)
 	case MemPoolTxsDesc:
 		return (MemPoolTxsDesc)(_txs)
+	case TxsFromAddressAsc:
+		return (TxsFromAddressAsc)(_txs)
 	default:
 		return nil
 
@@ -108,4 +116,41 @@ func findTxFromSlice(txs []*MemPoolTx, tx *MemPoolTx) int {
 
 	return idx
 
+}
+
+// CleanSlice - When we're done using one slice of txs, it's better
+// to clean those up, so that it becomes eligible for GC
+func CleanSlice(txs []*MemPoolTx) {
+
+	for i := 0; i < len(txs); i++ {
+		txs[i] = nil
+	}
+
+}
+
+// UntilNonceGap - Returns subslice of txs, where no nonce-gap exists
+// for `> nonce + 1`
+func UntilNonceGap(txs []*MemPoolTx, nonce hexutil.Uint64) []*MemPoolTx {
+	result := make([]*MemPoolTx, 0, len(txs))
+
+	for i := 0; i < len(txs); i++ {
+
+		if txs[i].Nonce <= nonce+1 {
+			result = append(result, txs[i])
+			continue
+		}
+
+		if i == 0 && txs[i].Nonce-nonce > 1 {
+			break
+		}
+
+		if txs[i].Nonce-txs[i-1].Nonce > 1 {
+			break
+		}
+
+		result = append(result, txs[i])
+
+	}
+
+	return result
 }

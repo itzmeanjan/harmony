@@ -4,11 +4,10 @@ import (
 	"context"
 	"log"
 	"runtime"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gammazero/workerpool"
 	"github.com/go-redis/redis/v8"
@@ -19,24 +18,151 @@ import (
 // PendingPool - Currently present pending tx(s) i.e. which are ready to
 // be mined in next block
 type PendingPool struct {
-	Transactions      map[common.Hash]*MemPoolTx
-	AscTxsByGasPrice  TxList
-	DescTxsByGasPrice TxList
-	Lock              *sync.RWMutex
-	IsPruning         bool
-	AddTxChan         chan AddRequest
-	RemoveTxChan      chan RemoveRequest
-	TxExistsChan      chan ExistsRequest
-	GetTxChan         chan GetRequest
-	CountTxsChan      chan CountRequest
-	ListTxsChan       chan ListRequest
-	PubSub            *redis.Client
-	RPC               *rpc.Client
+	Transactions             map[common.Hash]*MemPoolTx
+	TxsFromAddress           map[common.Address]TxList
+	DroppedTxs               map[common.Hash]bool
+	RemovedTxs               map[common.Hash]bool
+	AscTxsByGasPrice         TxList
+	DescTxsByGasPrice        TxList
+	AddTxChan                chan AddRequest
+	AddFromQueuedPoolChan    chan AddRequest
+	RemoveTxChan             chan RemoveRequest
+	AlreadyInPendingPoolChan chan *MemPoolTx
+	TxExistsChan             chan ExistsRequest
+	GetTxChan                chan GetRequest
+	CountTxsChan             chan CountRequest
+	ListTxsChan              chan ListRequest
+	TxsFromAChan             chan TxsFromARequest
+	PubSub                   *redis.Client
+	RPC                      *rpc.Client
+}
+
+// HasBeenAllocatedFor - Given an address from which tx was sent
+// is being checked for whether we've allocated some memory space for keeping txs
+// in pool, only sent from that specific address or not
+//
+// @note This function is supposed to be invoked when lock is already held
+func (p *PendingPool) hasBeenAllocatedFor(addr common.Address) bool {
+
+	_, ok := p.TxsFromAddress[addr]
+	return ok
+
+}
+
+// AllocateFor - If memory for keeping txs sent from some
+// specifiic address is not allocated yet, it'll do so
+// for 16 tx entries
+//
+// It means, it can at max keep 16 txs from same address in pool, primarily
+// But it can be incremented if required
+//
+// @note This function is supposed to be invoked when lock is already held
+func (p *PendingPool) allocateFor(addr common.Address) TxList {
+
+	if p.hasBeenAllocatedFor(addr) {
+		return p.TxsFromAddress[addr]
+	}
+
+	p.TxsFromAddress[addr] = make(TxsFromAddressAsc, 0, 16)
+	return p.TxsFromAddress[addr]
+
 }
 
 // Start - This method is supposed to be run as an independent
 // go routine, maintaining pending pool state, through out its life time
 func (p *PendingPool) Start(ctx context.Context) {
+
+	// Closure for checking whether adding new tx triggers
+	// condition for dropping some other tx
+	//
+	// Selecting which tx to be dropped
+	//
+	// - Tx with lowest gas price paid ✅
+	// - Oldest tx living in mempool ❌
+	// - Oldest tx with lowest gas price paid ❌
+	//
+	// ✅ : Implemented
+	// ❌ : Not yet
+	//
+	// @note Don't accept tx which are already dropped
+	needToDropTxs := func() bool {
+		return uint64(p.AscTxsByGasPrice.len())+1 > config.GetPendingPoolSize()
+	}
+
+	pickTxWithLowestGasPrice := func() *MemPoolTx {
+		return p.AscTxsByGasPrice.get()[0]
+	}
+
+	// Plain simple safe tx adding into pool, logic, invoke it from other section
+	//
+	// Don't rewrite this logic again
+	addTx := func(tx *MemPoolTx) {
+
+		p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
+		p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
+		p.TxsFromAddress[tx.From] = Insert(p.allocateFor(tx.From), tx)
+		p.Transactions[tx.Hash] = tx
+
+	}
+
+	// Plain simple remove tx logic, use it everywhere else
+	removeTx := func(tx *MemPoolTx) {
+
+		// Remove from sorted tx list, keep it sorted
+		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
+		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
+		p.TxsFromAddress[tx.From] = Remove(p.TxsFromAddress[tx.From], tx)
+		delete(p.Transactions, tx.Hash)
+
+	}
+
+	// Silently drop some tx, before adding
+	// new one, so that we don't exceed limit
+	// set up by user
+	dropTx := func(tx *MemPoolTx) {
+
+		removeTx(tx)
+		// 👇 op not being done while holding lock
+		// is due to the fact, no other competing
+		// worker attempting to read from/ write to
+		// this one, now
+		p.DroppedTxs[tx.Hash] = true
+
+	}
+
+	// Closure for safely adding new tx into pool
+	txAdder := func(tx *MemPoolTx) bool {
+
+		if _, ok := p.Transactions[tx.Hash]; ok {
+			return false
+		}
+
+		if _, ok := p.DroppedTxs[tx.Hash]; ok {
+			return false
+		}
+
+		if _, ok := p.RemovedTxs[tx.Hash]; ok {
+			return false
+		}
+
+		if needToDropTxs() {
+			dropTx(pickTxWithLowestGasPrice())
+
+			if len(p.DroppedTxs)%10 == 0 {
+				log.Printf("🧹 Dropped 10 pending txs, was about to hit limit\n")
+			}
+		}
+
+		// Marking we found this tx in mempool now
+		tx.PendingFrom = time.Now().UTC()
+		tx.Pool = "pending"
+
+		addTx(tx)
+		p.PublishAdded(ctx, p.PubSub, tx)
+
+		return true
+
+	}
 
 	// Just a closure, which will remove existing tx
 	// from pending pool, assuming it has been confirmed/ dropped
@@ -44,19 +170,10 @@ func (p *PendingPool) Start(ctx context.Context) {
 	// This is extracted out here, for ease of usability
 	txRemover := func(txStat *TxStatus) bool {
 
-		// -- Safe reading, begins
-		p.Lock.RLock()
-
 		tx, ok := p.Transactions[txStat.Hash]
 		if !ok {
-
-			p.Lock.RUnlock()
 			return false
-
 		}
-
-		p.Lock.RUnlock()
-		// -- reading ends
 
 		// Tx got confirmed/ dropped, to be used when computing
 		// how long it spent in pending pool
@@ -70,19 +187,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 			tx.ConfirmedAt = time.Now().UTC()
 		}
 
-		// -- Safe writing, critical section begins
-		p.Lock.Lock()
-
-		// Remove from sorted tx list, keep it sorted
-		p.AscTxsByGasPrice = Remove(p.AscTxsByGasPrice, tx)
-		p.DescTxsByGasPrice = Remove(p.DescTxsByGasPrice, tx)
-
-		delete(p.Transactions, txStat.Hash)
-
-		p.Lock.Unlock()
-		// -- writing ends
-
-		// Publishing this confirmed/ dropped tx
+		removeTx(tx)
 		p.PublishRemoved(ctx, p.PubSub, tx)
 
 		return true
@@ -98,99 +203,54 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.AddTxChan:
 
-			// This is what we're trying to add
-			tx := req.Tx
+			added := txAdder(req.Tx)
+			req.ResponseChan <- added
 
-			// -- Safe reading begins
-			p.Lock.RLock()
-
-			if _, ok := p.Transactions[tx.Hash]; ok {
-				req.ResponseChan <- false
-
-				p.Lock.RUnlock()
-				break
+			// @note Only if added successfully
+			if added {
+				// Letting queued pool know, this tx is already added
+				// in pending pool, so it can be removed from queued pool
+				// if it's living there too
+				p.AlreadyInPendingPoolChan <- req.Tx
 			}
 
-			p.Lock.RUnlock()
-			// -- reading ends
+		case req := <-p.AddFromQueuedPoolChan:
 
-			// Marking we found this tx in mempool now
-			tx.PendingFrom = time.Now().UTC()
-			tx.Pool = "pending"
-
-			// --- Critical section, starts
-			p.Lock.Lock()
-
-			// Creating entry
-			p.Transactions[tx.Hash] = tx
-
-			// Insert into sorted pending tx list, keep sorted
-			p.AscTxsByGasPrice = Insert(p.AscTxsByGasPrice, tx)
-			p.DescTxsByGasPrice = Insert(p.DescTxsByGasPrice, tx)
-
-			p.Lock.Unlock()
-			// --- ends here
-
-			// After adding new tx in pending pool, also attempt to
-			// publish it to pubsub topic
-			p.PublishAdded(ctx, p.PubSub, tx)
-
-			req.ResponseChan <- true
+			req.ResponseChan <- txAdder(req.Tx)
 
 		case req := <-p.RemoveTxChan:
 
 			req.ResponseChan <- txRemover(req.TxStat)
 
+			// Marking that tx has been removed, so that
+			// it won't get picked up next time
+			p.RemovedTxs[req.TxStat.Hash] = true
+
 		case req := <-p.TxExistsChan:
 
-			// -- Safe reading begins
-			p.Lock.RLock()
-
 			_, ok := p.Transactions[req.Tx]
-
-			p.Lock.RUnlock()
-			// -- ends
-
 			req.ResponseChan <- ok
 
 		case req := <-p.GetTxChan:
 
-			// -- Safe reading begins
-			p.Lock.RLock()
-
 			if tx, ok := p.Transactions[req.Tx]; ok {
 				req.ResponseChan <- tx
-
-				p.Lock.RUnlock()
 				break
 			}
-
-			p.Lock.RUnlock()
-			// -- ends
 
 			req.ResponseChan <- nil
 
 		case req := <-p.CountTxsChan:
 
-			// -- Safe reading begins
-			p.Lock.RLock()
-
 			req.ResponseChan <- uint64(p.AscTxsByGasPrice.len())
-
-			p.Lock.RUnlock()
-			// -- ends
 
 		case req := <-p.ListTxsChan:
 
 			if req.Order == ASC {
-				// -- Safe reading begins
-				p.Lock.RLock()
 
 				// If empty, just return nil
 				if p.AscTxsByGasPrice.len() == 0 {
 					req.ResponseChan <- nil
-
-					p.Lock.RUnlock()
 					break
 				}
 
@@ -198,21 +258,15 @@ func (p *PendingPool) Start(ctx context.Context) {
 				copy(copied, p.AscTxsByGasPrice.get())
 
 				req.ResponseChan <- copied
-
-				p.Lock.RUnlock()
-				// -- ends
 				break
+
 			}
 
 			if req.Order == DESC {
-				// -- Safe reading begins
-				p.Lock.RLock()
 
 				// If empty, just return nil
 				if p.DescTxsByGasPrice.len() == 0 {
 					req.ResponseChan <- nil
-
-					p.Lock.RUnlock()
 					break
 				}
 
@@ -221,9 +275,27 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 				req.ResponseChan <- copied
 
-				p.Lock.RUnlock()
-				// -- ends
 			}
+
+		case req := <-p.TxsFromAChan:
+			// Return only those txs, which were sent by specific address `A`
+
+			if txs, ok := p.TxsFromAddress[req.From]; ok {
+
+				if txs.len() == 0 {
+					req.ResponseChan <- nil
+					break
+				}
+
+				copied := make([]*MemPoolTx, txs.len())
+				copy(copied, txs.get())
+
+				req.ResponseChan <- copied
+				break
+
+			}
+
+			req.ResponseChan <- nil
 
 		}
 
@@ -234,14 +306,14 @@ func (p *PendingPool) Start(ctx context.Context) {
 // Prune - Remove confirmed/ dropped txs from pending pool
 //
 // @note This method is supposed to be run as independent go routine
-func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs) {
+func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.CaughtTxs, confirmedTxsChan chan ConfirmedTx) {
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking whether tx was dropped or not
 	wp := workerpool.New(config.GetConcurrencyFactor())
 	defer wp.Stop()
 
-	internalChan := make(chan *TxStatus, 1024)
+	internalChan := make(chan *TxStatus, 4096)
 	var droppedOrConfirmed uint64
 
 	for {
@@ -251,63 +323,101 @@ func (p *PendingPool) Prune(ctx context.Context, commChan chan listen.CaughtTxs)
 		case <-ctx.Done():
 			return
 
-		case txs := <-commChan:
+		case txs := <-caughtTxsChan:
 
-			var expected uint64
+			var prunables []*MemPoolTx = make([]*MemPoolTx, 0, len(txs))
+
+			// How & which prunable tx(s) are kept in linear memory slot `prunables`
+			// i.e. starting from where & how many of those
+			//
+			// If we find one higher nonce value is processed already, we're skipping
+			// it because it **must** have included all lower nonce txs living in pool
+			// from same address
+			//
+			// But otherwise, we'll remove what already we've included for some lower
+			// nonce tx & include all for some higher nonce tx
+			type metadata struct {
+				nonce hexutil.Uint64
+				from  int
+				count int
+			}
+
+			var alreadyAddedFromA map[common.Address]*metadata = make(map[common.Address]*metadata)
 
 			for i := 0; i < len(txs); i++ {
 
-				func(tx *listen.CaughtTx) {
+				tx := p.Get(txs[i].Hash)
+				if tx == nil {
+					// well, couldn't find tx in pool
+					continue
+				}
+
+				if meta, ok := alreadyAddedFromA[tx.From]; ok {
+
+					if meta.nonce > tx.Nonce {
+						// well, we've already added tx into `prunables`, because we're already
+						// done with processing some tx with higher nonce & this tx was included there
+						continue
+					}
+
+					// We've already added prunables for some smaller nonce value
+					// which is why we're going to remove those from memory to avoid
+					// processing duplicates
+					copy(prunables[meta.from:], prunables[meta.from+meta.count:])
+					for j := 0; j < meta.count; j++ {
+						prunables[len(prunables)-meta.count+j] = nil
+					}
+					prunables = prunables[:len(prunables)-meta.count]
+					alreadyAddedFromA[tx.From] = nil
+
+				}
+
+				_prunableLocal := p.Prunables(tx)
+				_prubableLocalC := len(_prunableLocal)
+				_metadata := metadata{nonce: tx.Nonce, from: len(prunables), count: _prubableLocalC}
+
+				prunables = append(prunables, _prunableLocal...)
+				alreadyAddedFromA[tx.From] = &_metadata
+
+				// Can be GC-ed
+				CleanSlice(_prunableLocal)
+
+			}
+
+			// Letting queued pool pruning worker know txs from
+			// these addresses with this nonce got mined in this block
+			for addr := range alreadyAddedFromA {
+				confirmedTxsChan <- ConfirmedTx{From: addr, Nonce: alreadyAddedFromA[addr].nonce}
+			}
+
+			// not required anymore, can be GC-ed
+			alreadyAddedFromA = nil
+
+			for i := 0; i < len(prunables); i++ {
+
+				func(tx *MemPoolTx) {
 
 					wp.Submit(func() {
 
-						prunables := p.Prunables(tx.Hash)
-						if prunables == nil {
+						// Tx got confirmed/ dropped, to be used when computing
+						// how long it spent in pending pool
+						dropped, _ := tx.IsDropped(ctx, p.RPC)
+						if dropped {
+
+							internalChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
 							return
-						}
-
-						// Atomic increment, concurrent-safe [ expecting to behave well on all platforms ]
-						atomic.AddUint64(&expected, uint64(len(prunables)))
-
-						for i := 0; i < len(prunables); i++ {
-
-							func(idx int, tx *MemPoolTx) {
-
-								// First element of this list is always
-								// which tx got mined in block, so it's confirmed
-								//
-								// We might find some associated tx(s), which will non-zero-indexed
-								// elements, so it's safe to avoid `IsDropped` check for first txHash
-								if idx == 0 {
-									internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
-									return
-								}
-
-								wp.Submit(func() {
-
-									// Tx got confirmed/ dropped, to be used when computing
-									// how long it spent in pending pool
-									dropped, _ := tx.IsDropped(ctx, p.RPC)
-									if dropped {
-
-										internalChan <- &TxStatus{Hash: tx.Hash, Status: DROPPED}
-										return
-
-									}
-
-									internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
-
-								})
-
-							}(i, prunables[i])
 
 						}
+
+						internalChan <- &TxStatus{Hash: tx.Hash, Status: CONFIRMED}
 
 					})
 
-				}(txs[i])
+				}(prunables[i])
 
 			}
+
+			CleanSlice(prunables)
 
 		case tx := <-internalChan:
 
@@ -366,18 +476,12 @@ func (p *PendingPool) Count() uint64 {
 
 }
 
-// Prunables - Given tx hash, with which a tx has been mined
-// we're attempting to find out all txs which are living in pending pool
-// now & having same sender address & same/ lower nonce, so that
+// Prunables - Given tx, we're attempting to find out all txs which are living
+// in pending pool now & having same sender address & same/ lower nonce, so that
 // pruner can update state while removing mined txs from mempool
-func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
+func (p *PendingPool) Prunables(targetTx *MemPoolTx) []*MemPoolTx {
 
-	targetTx := p.Get(hash)
-	if targetTx == nil {
-		return nil
-	}
-
-	txs := p.DescListTxs()
+	txs := p.TxsFromA(targetTx.From)
 	if txs == nil {
 		return nil
 	}
@@ -388,9 +492,13 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 	// This is the tx which got mined
 	result = append(result, targetTx)
 
-	// Attempting to concurrently checking which txs are duplicate
-	// of a given tx hash
-	wp := workerpool.New(runtime.NumCPU())
+	var wp *workerpool.WorkerPool
+
+	if txCount > uint64(runtime.NumCPU()) {
+		wp = workerpool.New(runtime.NumCPU())
+	} else {
+		wp = workerpool.New(int(txCount))
+	}
 
 	for i := 0; i < len(txs); i++ {
 
@@ -398,7 +506,7 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 
 			wp.Submit(func() {
 
-				if tx.IsLowerNonce(targetTx) {
+				if tx.Hash != targetTx.Hash && tx.Nonce <= targetTx.Nonce {
 					commChan <- tx
 					return
 				}
@@ -412,7 +520,6 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 	}
 
 	var received uint64
-	mustReceive := txCount
 
 	// Waiting for all go routines to finish
 	for v := range commChan {
@@ -422,7 +529,7 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 		}
 
 		received++
-		if received >= mustReceive {
+		if received >= txCount {
 			break
 		}
 
@@ -433,6 +540,7 @@ func (p *PendingPool) Prunables(hash common.Hash) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -453,7 +561,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		return nil
 	}
 
-	txs := p.DescListTxs()
+	txs := p.TxsFromA(targetTx.From)
 	if txs == nil {
 		return nil
 	}
@@ -462,9 +570,13 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 	commChan := make(chan *MemPoolTx, txCount)
 	result := make([]*MemPoolTx, 0, txCount)
 
-	// Attempting to concurrently checking which txs are duplicate
-	// of a given tx hash
-	wp := workerpool.New(runtime.NumCPU())
+	var wp *workerpool.WorkerPool
+
+	if txCount > uint64(runtime.NumCPU()) {
+		wp = workerpool.New(runtime.NumCPU())
+	} else {
+		wp = workerpool.New(int(txCount))
+	}
 
 	for i := 0; i < len(txs); i++ {
 
@@ -486,9 +598,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 	}
 
 	var received uint64
-	mustReceive := txCount
 
-	// Waiting for all go routines to finish
 	for v := range commChan {
 
 		if v != nil {
@@ -496,7 +606,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 		}
 
 		received++
-		if received >= mustReceive {
+		if received >= txCount {
 			break
 		}
 
@@ -507,6 +617,7 @@ func (p *PendingPool) DuplicateTxs(hash common.Hash) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -534,77 +645,50 @@ func (p *PendingPool) DescListTxs() []*MemPoolTx {
 
 }
 
+// TxsFromA - Returns a slice of txs, where all of those are sent
+// by address `A`
+func (p *PendingPool) TxsFromA(addr common.Address) []*MemPoolTx {
+
+	respChan := make(chan []*MemPoolTx)
+
+	p.TxsFromAChan <- TxsFromARequest{ResponseChan: respChan, From: addr}
+
+	return <-respChan
+
+}
+
 // TopXWithHighGasPrice - Returns only top `X` tx(s) present in pending mempool,
 // where being top is determined by how much gas price paid by tx sender
 func (p *PendingPool) TopXWithHighGasPrice(x uint64) []*MemPoolTx {
-	return p.DescListTxs()[:x]
+
+	txs := p.DescListTxs()
+	if uint64(len(txs)) <= x {
+		return txs
+	}
+
+	CleanSlice(txs[x:])
+	return txs[:x]
+
 }
 
 // TopXWithLowGasPrice - Returns only top `X` tx(s) present in pending mempool,
 // where being top is determined by how low gas price paid by tx sender
 func (p *PendingPool) TopXWithLowGasPrice(x uint64) []*MemPoolTx {
-	return p.AscListTxs()[:x]
+
+	txs := p.AscListTxs()
+	if uint64(len(txs)) <= x {
+		return txs
+	}
+
+	CleanSlice(txs[x:])
+	return txs[:x]
+
 }
 
 // SentFrom - Returns a list of pending tx(s) sent from
 // specified address
 func (p *PendingPool) SentFrom(address common.Address) []*MemPoolTx {
-
-	txs := p.DescListTxs()
-	if txs == nil {
-		return nil
-	}
-
-	txCount := uint64(len(txs))
-	commChan := make(chan *MemPoolTx, txCount)
-	result := make([]*MemPoolTx, 0, txCount)
-
-	wp := workerpool.New(runtime.NumCPU())
-
-	for i := 0; i < len(txs); i++ {
-
-		func(tx *MemPoolTx) {
-
-			wp.Submit(func() {
-
-				if tx.IsSentFrom(address) {
-					commChan <- tx
-					return
-				}
-
-				commChan <- nil
-
-			})
-
-		}(txs[i])
-
-	}
-
-	var received uint64
-	mustReceive := txCount
-
-	// Waiting for all go routines to finish
-	for v := range commChan {
-
-		if v != nil {
-			result = append(result, v)
-		}
-
-		received++
-		if received >= mustReceive {
-			break
-		}
-
-	}
-
-	// This call is irrelevant here, probably, but still being made
-	//
-	// Because all workers have exited, otherwise we could have never
-	// reached this point
-	wp.Stop()
-
-	return result
-
+	return p.TxsFromA(address)
 }
 
 // SentTo - Returns a list of pending tx(s) sent to
@@ -663,6 +747,7 @@ func (p *PendingPool) SentTo(address common.Address) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -724,6 +809,7 @@ func (p *PendingPool) OlderThanX(x time.Duration) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -785,6 +871,7 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 	// Because all workers have exited, otherwise we could have never
 	// reached this point
 	wp.Stop()
+	CleanSlice(txs)
 
 	return result
 
@@ -805,6 +892,19 @@ func (p *PendingPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
 }
 
+// AddUnstuck - When attempting to add new tx from queued pool to here
+// it's supposed to be invoked so that queued pool doesn't receive notification
+// back to self for so
+func (p *PendingPool) AddUnstuck(ctx context.Context, tx *MemPoolTx) bool {
+
+	respChan := make(chan bool)
+
+	p.AddFromQueuedPoolChan <- AddRequest{Tx: tx, ResponseChan: respChan}
+
+	return <-respChan
+
+}
+
 // VerifiedAdd - Before adding tx from queued pool, just check do we
 // really need to add this tx in pending pool i.e. is this tx really
 // pending ?
@@ -819,7 +919,7 @@ func (p *PendingPool) VerifiedAdd(ctx context.Context, tx *MemPoolTx) bool {
 		return false
 	}
 
-	return p.Add(ctx, tx)
+	return p.AddUnstuck(ctx, tx)
 
 }
 

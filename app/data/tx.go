@@ -356,3 +356,12 @@ type TxStatus struct {
 	Hash   common.Hash
 	Status int
 }
+
+// ConfirmedTx - When we learn a certain tx has been confirmed
+// by listening to blocks getting mined, we'll attempt to
+// dequeue any stuck tx from queued pool & put it into
+// pending pool
+type ConfirmedTx struct {
+	From  common.Address
+	Nonce hexutil.Uint64
+}

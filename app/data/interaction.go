@@ -73,3 +73,10 @@ type ListRequest struct {
 	Order        int
 	ResponseChan chan []*MemPoolTx
 }
+
+// TxsFromARequest - When requesting for txs living in pool
+// sent from some specific address, use this construct
+type TxsFromARequest struct {
+	From         common.Address
+	ResponseChan chan []*MemPoolTx
+}
