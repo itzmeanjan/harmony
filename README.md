@@ -1,6 +1,8 @@
 # harmony
 Reduce Chaos in MemPool 😌
 
+**Production grade release : >= v0.8.0**
+
 ![banner](./sc/banner.png)
 
 ## Table of Contents
@@ -136,7 +138,7 @@ RedisDB | Redis database to be used. **[ By default there're 16 of them ]**
 ConcurrencyFactor | Whenever concurrency can be leveraged, `harmony` will create worker pool with `#-of logical CPUs x ConcurrencyFactor` go routines. **[ Can be float too ]**
 Port | Starts HTTP server on this port ( > 1024 )
 
-> Note : When pool size exceeds, tx with lowest gas price paid to be dropped
+> Note : When pool size exceeds, tx with lowest gas price paid to be dropped. Consider setting pool sizes to higher values, if you've enough memory on machine, otherwise it'll crash.
 
 ---
 
@@ -1234,7 +1236,3 @@ python3 subscribe_1.py
 ```bash
 deactivate
 ```
-
----
-> Note: `harmony` is not recommended for use in production environment at time of writing this. It's under active development.
----
