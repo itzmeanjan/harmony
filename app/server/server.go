@@ -84,7 +84,7 @@ func Start(ctx context.Context, res *data.Resource) {
 		v1.GET("/graphql", func(c echo.Context) error {
 
 			if !c.IsWebSocket() {
-				return errors.New("Only websocket transport allowed")
+				return errors.New("only websocket transport allowed")
 			}
 
 			graphql.ServeHTTP(c.Response().Writer, c.Request())
@@ -95,7 +95,7 @@ func Start(ctx context.Context, res *data.Resource) {
 		v1.POST("/graphql", func(c echo.Context) error {
 
 			if c.IsWebSocket() {
-				return errors.New("Only http transport allowed")
+				return errors.New("only http transport allowed")
 			}
 
 			graphql.ServeHTTP(c.Response().Writer, c.Request())
