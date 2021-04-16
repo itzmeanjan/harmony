@@ -223,9 +223,9 @@ func (p *PendingPool) Start(ctx context.Context) {
 		case req := <-p.RemoveTxChan:
 
 			removed := txRemover(req.TxStat)
-			if removed {
-				req.ResponseChan <- removed
+			req.ResponseChan <- removed
 
+			if removed {
 				// Marking that tx has been removed, so that
 				// it won't get picked up next time
 				p.RemovedTxs[req.TxStat.Hash] = true
