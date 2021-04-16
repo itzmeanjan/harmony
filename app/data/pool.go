@@ -68,6 +68,11 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 	return m.Queued.Count()
 }
 
+// DoneTxCount - #-of tx(s) seen to processed during this node's life time
+func (m *MemPool) DoneTxCount() uint64 {
+	return m.Pending.Processed()
+}
+
 // PendingForGTE - Returning list of tx(s), pending for more than
 // x time unit
 func (m *MemPool) PendingForGTE(x time.Duration) []*MemPoolTx {

@@ -6,6 +6,7 @@ type Stat struct {
 	PendingPoolSize uint64 `json:"pendingPoolSize"`
 	QueuedPoolSize  uint64 `json:"queuedPoolSize"`
 	Uptime          string `json:"uptime"`
+	Processed       uint64 `json:"processed"`
 	NetworkID       uint64 `json:"networkID"`
 }
 

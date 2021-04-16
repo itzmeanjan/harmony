@@ -75,6 +75,7 @@ func Start(ctx context.Context, res *data.Resource) {
 				PendingPoolSize: res.Pool.PendingPoolLength(),
 				QueuedPoolSize:  res.Pool.QueuedPoolLength(),
 				Uptime:          time.Now().UTC().Sub(res.StartedAt).String(),
+				Processed:       res.Pool.DoneTxCount(),
 				NetworkID:       res.NetworkID,
 			})
 
