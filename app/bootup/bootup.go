@@ -116,6 +116,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		RemovedTxs:               make(map[common.Hash]bool),
 		AscTxsByGasPrice:         make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
 		DescTxsByGasPrice:        make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
+		Done:                     0,
 		AddTxChan:                make(chan data.AddRequest, 1),
 		AddFromQueuedPoolChan:    make(chan data.AddRequest, 1),
 		RemoveTxChan:             make(chan data.RemoveRequest, 1),
@@ -125,6 +126,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		CountTxsChan:             make(chan data.CountRequest, 1),
 		ListTxsChan:              make(chan data.ListRequest, 1),
 		TxsFromAChan:             make(chan data.TxsFromARequest, 1),
+		DoneChan:                 make(chan chan uint64, 1),
 		PubSub:                   _redis,
 		RPC:                      client,
 	}

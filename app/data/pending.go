@@ -24,6 +24,7 @@ type PendingPool struct {
 	RemovedTxs               map[common.Hash]bool
 	AscTxsByGasPrice         TxList
 	DescTxsByGasPrice        TxList
+	Done                     uint64
 	AddTxChan                chan AddRequest
 	AddFromQueuedPoolChan    chan AddRequest
 	RemoveTxChan             chan RemoveRequest
@@ -33,6 +34,7 @@ type PendingPool struct {
 	CountTxsChan             chan CountRequest
 	ListTxsChan              chan ListRequest
 	TxsFromAChan             chan TxsFromARequest
+	DoneChan                 chan chan uint64
 	PubSub                   *redis.Client
 	RPC                      *rpc.Client
 }
@@ -220,11 +222,15 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.RemoveTxChan:
 
-			req.ResponseChan <- txRemover(req.TxStat)
+			removed := txRemover(req.TxStat)
+			if removed {
+				req.ResponseChan <- removed
 
-			// Marking that tx has been removed, so that
-			// it won't get picked up next time
-			p.RemovedTxs[req.TxStat.Hash] = true
+				// Marking that tx has been removed, so that
+				// it won't get picked up next time
+				p.RemovedTxs[req.TxStat.Hash] = true
+				p.Done++
+			}
 
 		case req := <-p.TxExistsChan:
 
@@ -296,6 +302,16 @@ func (p *PendingPool) Start(ctx context.Context) {
 			}
 
 			req.ResponseChan <- nil
+
+		case req := <-p.DoneChan:
+
+			// How many tx(s) are seen to be
+			// processed successfully & left mempool
+			// permanently, as seen by this node, during
+			// its lifetime
+			//
+			// Nothing but count of `dropped` & `confirmed` tx(s)
+			req <- p.Done
 
 		}
 
@@ -474,6 +490,18 @@ func (p *PendingPool) Count() uint64 {
 
 	return <-respChan
 
+}
+
+// Processed - These many tx(s) have permanently left mempool
+// as seen by this `harmony` instance during its life time
+//
+// This is nothing but count of `dropped` & `confirmed` tx(s)
+func (p *PendingPool) Processed() uint64 {
+	respChan := make(chan uint64)
+
+	p.DoneChan <- respChan
+
+	return <-respChan
 }
 
 // Prunables - Given tx, we're attempting to find out all txs which are living
