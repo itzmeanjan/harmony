@@ -525,6 +525,24 @@ func (p *PendingPool) Processed() uint64 {
 	return <-respChan
 }
 
+// UpdateLastSeenBlock - Block header subscriber is supposed to be
+// invoking this method, when it sees new block
+func (p *PendingPool) UpdateLastSeenBlock(number uint64) bool {
+	respChan := make(chan bool)
+
+	p.SetLastSeenBlockChan <- NewSeenBlock{Number: number, ResponseChan: respChan}
+	return <-respChan
+}
+
+// GetLastSeenBlock - Get last seen block & time, as reported
+// by block header listener
+func (p *PendingPool) GetLastSeenBlock() LastSeenBlock {
+	respChan := make(chan LastSeenBlock)
+
+	p.LastSeenBlockChan <- respChan
+	return <-respChan
+}
+
 // Prunables - Given tx, we're attempting to find out all txs which are living
 // in pending pool now & having same sender address & same/ lower nonce, so that
 // pruner can update state while removing mined txs from mempool
