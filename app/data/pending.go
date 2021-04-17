@@ -37,7 +37,7 @@ type PendingPool struct {
 	ListTxsChan              chan ListRequest
 	TxsFromAChan             chan TxsFromARequest
 	DoneChan                 chan chan uint64
-	SetLastSeenBlockChan     chan NewSeenBlock
+	SetLastSeenBlockChan     chan uint64
 	LastSeenBlockChan        chan chan LastSeenBlock
 	PubSub                   *redis.Client
 	RPC                      *rpc.Client
@@ -317,18 +317,15 @@ func (p *PendingPool) Start(ctx context.Context) {
 			// Nothing but count of `dropped` & `confirmed` tx(s)
 			req <- p.Done
 
-		case req := <-p.SetLastSeenBlockChan:
+		case num := <-p.SetLastSeenBlockChan:
 
-			// Never look behind, just keep moving forward
-			if p.LastSeenBlock > req.Number {
-				req.ResponseChan <- false
+			// Only keep moving forward
+			if p.LastSeenBlock > num {
 				continue
 			}
 
-			p.LastSeenBlock = req.Number
+			p.LastSeenBlock = num
 			p.LastSeenAt = time.Now().UTC()
-
-			req.ResponseChan <- true
 
 		case req := <-p.LastSeenBlockChan:
 
@@ -522,15 +519,6 @@ func (p *PendingPool) Processed() uint64 {
 
 	p.DoneChan <- respChan
 
-	return <-respChan
-}
-
-// UpdateLastSeenBlock - Block header subscriber is supposed to be
-// invoking this method, when it sees new block
-func (p *PendingPool) UpdateLastSeenBlock(number uint64) bool {
-	respChan := make(chan bool)
-
-	p.SetLastSeenBlockChan <- NewSeenBlock{Number: number, ResponseChan: respChan}
 	return <-respChan
 }
 
