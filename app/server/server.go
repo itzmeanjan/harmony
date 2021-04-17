@@ -79,7 +79,7 @@ func Start(ctx context.Context, res *data.Resource) {
 				Uptime:          time.Now().UTC().Sub(res.StartedAt).String(),
 				Processed:       res.Pool.DoneTxCount(),
 				LatestBlock:     latestBlock.Number,
-				SeenAgo:         time.Now().UTC().Sub(latestBlock.At),
+				SeenAgo:         time.Now().UTC().Sub(latestBlock.At).String(),
 				NetworkID:       res.NetworkID,
 			})
 
