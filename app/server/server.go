@@ -71,11 +71,15 @@ func Start(ctx context.Context, res *data.Resource) {
 
 		v1.GET("/stat", func(c echo.Context) error {
 
+			latestBlock := res.Pool.LastSeenBlock()
+
 			return c.JSON(http.StatusOK, &data.Stat{
 				PendingPoolSize: res.Pool.PendingPoolLength(),
 				QueuedPoolSize:  res.Pool.QueuedPoolLength(),
 				Uptime:          time.Now().UTC().Sub(res.StartedAt).String(),
 				Processed:       res.Pool.DoneTxCount(),
+				LatestBlock:     latestBlock.Number,
+				SeenAgo:         time.Now().UTC().Sub(latestBlock.At),
 				NetworkID:       res.NetworkID,
 			})
 
