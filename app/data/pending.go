@@ -317,6 +317,17 @@ func (p *PendingPool) Start(ctx context.Context) {
 			// Nothing but count of `dropped` & `confirmed` tx(s)
 			req <- p.Done
 
+		case req := <-p.SetLastSeenBlockChan:
+
+			p.LastSeenBlock = req.Number
+			p.LastSeenAt = time.Now().UTC()
+
+			req.ResponseChan <- true
+
+		case req := <-p.LastSeenBlockChan:
+
+			req <- LastSeenBlock{Number: p.LastSeenBlock, At: p.LastSeenAt}
+
 		}
 
 	}
