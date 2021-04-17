@@ -25,6 +25,8 @@ type PendingPool struct {
 	AscTxsByGasPrice         TxList
 	DescTxsByGasPrice        TxList
 	Done                     uint64
+	LastSeenBlock            uint64
+	LastSeenAt               time.Time
 	AddTxChan                chan AddRequest
 	AddFromQueuedPoolChan    chan AddRequest
 	RemoveTxChan             chan RemoveRequest
@@ -35,6 +37,8 @@ type PendingPool struct {
 	ListTxsChan              chan ListRequest
 	TxsFromAChan             chan TxsFromARequest
 	DoneChan                 chan chan uint64
+	SetLastSeenBlockChan     chan NewSeenBlock
+	LastSeenBlockChan        chan chan LastSeenBlock
 	PubSub                   *redis.Client
 	RPC                      *rpc.Client
 }
