@@ -319,6 +319,12 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.SetLastSeenBlockChan:
 
+			// Never look behind, just keep moving forward
+			if p.LastSeenBlock > req.Number {
+				req.ResponseChan <- false
+				continue
+			}
+
 			p.LastSeenBlock = req.Number
 			p.LastSeenAt = time.Now().UTC()
 
