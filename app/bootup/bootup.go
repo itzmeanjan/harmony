@@ -107,6 +107,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// & queued pool, so that when new tx gets added into pending pool
 	// queued pool also gets notified & gets to update state if required
 	alreadyInPendingPoolChan := make(chan *data.MemPoolTx, 4096)
+	inPendingPoolChan := make(chan *data.MemPoolTx, 4096)
 	lastSeenBlockChan := make(chan uint64, 1)
 
 	// initialising pending pool
@@ -124,6 +125,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		AddFromQueuedPoolChan:    make(chan data.AddRequest, 1),
 		RemoveTxChan:             make(chan data.RemoveRequest, 1),
 		AlreadyInPendingPoolChan: alreadyInPendingPoolChan,
+		InPendingPoolChan:        inPendingPoolChan,
 		TxExistsChan:             make(chan data.ExistsRequest, 1),
 		GetTxChan:                make(chan data.GetRequest, 1),
 		CountTxsChan:             make(chan data.CountRequest, 1),

@@ -31,6 +31,7 @@ type PendingPool struct {
 	AddFromQueuedPoolChan    chan AddRequest
 	RemoveTxChan             chan RemoveRequest
 	AlreadyInPendingPoolChan chan *MemPoolTx
+	InPendingPoolChan        chan<- *MemPoolTx
 	TxExistsChan             chan ExistsRequest
 	GetTxChan                chan GetRequest
 	CountTxsChan             chan CountRequest
@@ -218,11 +219,13 @@ func (p *PendingPool) Start(ctx context.Context) {
 				// in pending pool, so it can be removed from queued pool
 				// if it's living there too
 				p.AlreadyInPendingPoolChan <- req.Tx
+				p.InPendingPoolChan <- req.Tx
 			}
 
 		case req := <-p.AddFromQueuedPoolChan:
 
 			req.ResponseChan <- txAdder(req.Tx)
+			p.InPendingPoolChan <- req.Tx
 
 		case req := <-p.RemoveTxChan:
 
