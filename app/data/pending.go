@@ -324,7 +324,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			// Only keep moving forward
 			if p.LastSeenBlock > num {
-				continue
+				break
 			}
 
 			p.LastSeenBlock = num
