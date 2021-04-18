@@ -1,6 +1,10 @@
 package data
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // Sorting direction representation
 const (
@@ -79,4 +83,18 @@ type ListRequest struct {
 type TxsFromARequest struct {
 	From         common.Address
 	ResponseChan chan []*MemPoolTx
+}
+
+// NewSeenBlock - When new block is seen by header listener, concurrent-safe updation
+// is sent to pending pool worker
+type NewSeenBlock struct {
+	Number       uint64
+	ResponseChan chan bool
+}
+
+// LastSeenBlock - Which block number was last seen by header subscriber
+// along with time
+type LastSeenBlock struct {
+	Number uint64
+	At     time.Time
 }

@@ -25,7 +25,7 @@ type CaughtTxs []*CaughtTx
 // SubscribeHead - Subscribe to block headers & as soon as new block gets mined
 // its txs are picked up & published on a go channel, which will be listened
 // to by pending pool watcher, so that it can prune its state
-func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan CaughtTxs) {
+func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan CaughtTxs, lastSeenBlockChan chan uint64) {
 
 	retryTable := make(map[*big.Int]bool)
 	headerChan := make(chan *types.Header, 64)
@@ -49,7 +49,7 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 
 		case header := <-headerChan:
 
-			if !ProcessBlock(ctx, client, header.Number, commChan) {
+			if !ProcessBlock(ctx, client, header.Number, commChan, lastSeenBlockChan) {
 
 				// Put entry in table that we failed to fetch this block, to be
 				// attempted in some time future
@@ -69,7 +69,7 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 			success := make([]*big.Int, 0, pendingC)
 			for num := range retryTable {
 
-				if ProcessBlock(ctx, client, num, commChan) {
+				if ProcessBlock(ctx, client, num, commChan, lastSeenBlockChan) {
 					success = append(success, num)
 				}
 
@@ -93,7 +93,7 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan 
 }
 
 // ProcessBlock - Fetches all txs present in mined block & passes those to pending pool pruning worker
-func ProcessBlock(ctx context.Context, client *ethclient.Client, number *big.Int, commChan chan CaughtTxs) bool {
+func ProcessBlock(ctx context.Context, client *ethclient.Client, number *big.Int, commChan chan CaughtTxs, lastSeenBlockChan chan uint64) bool {
 
 	block, err := client.BlockByNumber(ctx, number)
 	if err != nil {
@@ -123,6 +123,7 @@ func ProcessBlock(ctx context.Context, client *ethclient.Client, number *big.Int
 	}
 
 	commChan <- txs
+	lastSeenBlockChan <- number.Uint64()
 	return true
 
 }

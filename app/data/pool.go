@@ -68,6 +68,17 @@ func (m *MemPool) QueuedPoolLength() uint64 {
 	return m.Queued.Count()
 }
 
+// DoneTxCount - #-of tx(s) seen to processed during this node's life time
+func (m *MemPool) DoneTxCount() uint64 {
+	return m.Pending.Processed()
+}
+
+// LastSeenBlock - Last seen block by mempool & when it was seen, to be invoked
+// by stat generator http request handler method
+func (m *MemPool) LastSeenBlock() LastSeenBlock {
+	return m.Pending.GetLastSeenBlock()
+}
+
 // PendingForGTE - Returning list of tx(s), pending for more than
 // x time unit
 func (m *MemPool) PendingForGTE(x time.Duration) []*MemPoolTx {

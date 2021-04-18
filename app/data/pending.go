@@ -24,6 +24,9 @@ type PendingPool struct {
 	RemovedTxs               map[common.Hash]bool
 	AscTxsByGasPrice         TxList
 	DescTxsByGasPrice        TxList
+	Done                     uint64
+	LastSeenBlock            uint64
+	LastSeenAt               time.Time
 	AddTxChan                chan AddRequest
 	AddFromQueuedPoolChan    chan AddRequest
 	RemoveTxChan             chan RemoveRequest
@@ -33,6 +36,9 @@ type PendingPool struct {
 	CountTxsChan             chan CountRequest
 	ListTxsChan              chan ListRequest
 	TxsFromAChan             chan TxsFromARequest
+	DoneChan                 chan chan uint64
+	SetLastSeenBlockChan     chan uint64
+	LastSeenBlockChan        chan chan LastSeenBlock
 	PubSub                   *redis.Client
 	RPC                      *rpc.Client
 }
@@ -220,11 +226,15 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 		case req := <-p.RemoveTxChan:
 
-			req.ResponseChan <- txRemover(req.TxStat)
+			removed := txRemover(req.TxStat)
+			req.ResponseChan <- removed
 
-			// Marking that tx has been removed, so that
-			// it won't get picked up next time
-			p.RemovedTxs[req.TxStat.Hash] = true
+			if removed {
+				// Marking that tx has been removed, so that
+				// it won't get picked up next time
+				p.RemovedTxs[req.TxStat.Hash] = true
+				p.Done++
+			}
 
 		case req := <-p.TxExistsChan:
 
@@ -296,6 +306,30 @@ func (p *PendingPool) Start(ctx context.Context) {
 			}
 
 			req.ResponseChan <- nil
+
+		case req := <-p.DoneChan:
+
+			// How many tx(s) are seen to be
+			// processed successfully & left mempool
+			// permanently, as seen by this node, during
+			// its lifetime
+			//
+			// Nothing but count of `dropped` & `confirmed` tx(s)
+			req <- p.Done
+
+		case num := <-p.SetLastSeenBlockChan:
+
+			// Only keep moving forward
+			if p.LastSeenBlock > num {
+				continue
+			}
+
+			p.LastSeenBlock = num
+			p.LastSeenAt = time.Now().UTC()
+
+		case req := <-p.LastSeenBlockChan:
+
+			req <- LastSeenBlock{Number: p.LastSeenBlock, At: p.LastSeenAt}
 
 		}
 
@@ -474,6 +508,27 @@ func (p *PendingPool) Count() uint64 {
 
 	return <-respChan
 
+}
+
+// Processed - These many tx(s) have permanently left mempool
+// as seen by this `harmony` instance during its life time
+//
+// This is nothing but count of `dropped` & `confirmed` tx(s)
+func (p *PendingPool) Processed() uint64 {
+	respChan := make(chan uint64)
+
+	p.DoneChan <- respChan
+
+	return <-respChan
+}
+
+// GetLastSeenBlock - Get last seen block & time, as reported
+// by block header listener
+func (p *PendingPool) GetLastSeenBlock() LastSeenBlock {
+	respChan := make(chan LastSeenBlock)
+
+	p.LastSeenBlockChan <- respChan
+	return <-respChan
 }
 
 // Prunables - Given tx, we're attempting to find out all txs which are living

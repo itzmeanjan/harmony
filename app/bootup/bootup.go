@@ -107,6 +107,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// & queued pool, so that when new tx gets added into pending pool
 	// queued pool also gets notified & gets to update state if required
 	alreadyInPendingPoolChan := make(chan *data.MemPoolTx, 4096)
+	lastSeenBlockChan := make(chan uint64, 1)
 
 	// initialising pending pool
 	pendingPool := &data.PendingPool{
@@ -116,6 +117,9 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		RemovedTxs:               make(map[common.Hash]bool),
 		AscTxsByGasPrice:         make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
 		DescTxsByGasPrice:        make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
+		Done:                     0,
+		LastSeenBlock:            0,
+		LastSeenAt:               time.Now().UTC(),
 		AddTxChan:                make(chan data.AddRequest, 1),
 		AddFromQueuedPoolChan:    make(chan data.AddRequest, 1),
 		RemoveTxChan:             make(chan data.RemoveRequest, 1),
@@ -125,6 +129,9 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		CountTxsChan:             make(chan data.CountRequest, 1),
 		ListTxsChan:              make(chan data.ListRequest, 1),
 		TxsFromAChan:             make(chan data.TxsFromARequest, 1),
+		DoneChan:                 make(chan chan uint64, 1),
+		SetLastSeenBlockChan:     lastSeenBlockChan,
+		LastSeenBlockChan:        make(chan chan data.LastSeenBlock, 1),
 		PubSub:                   _redis,
 		RPC:                      client,
 	}
@@ -171,7 +178,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	go pool.Queued.Prune(ctx, confirmedTxsChan, alreadyInPendingPoolChan)
 	// Listens for new block headers & informs 👆 (a) for pruning
 	// txs which can be/ need to be
-	go listen.SubscribeHead(ctx, wsClient, caughtTxsChan)
+	go listen.SubscribeHead(ctx, wsClient, caughtTxsChan, lastSeenBlockChan)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
