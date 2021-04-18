@@ -164,6 +164,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// Block head listener & pending pool pruner
 	// talks over this buffered channel
 	caughtTxsChan := make(chan listen.CaughtTxs, 16)
+	notFoundTxsChan := make(chan listen.CaughtTxs, 16)
 	confirmedTxsChan := make(chan data.ConfirmedTx, 4096)
 
 	// Starting pool life cycle manager go routine
@@ -172,7 +173,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	//
 	// After that this pool will also let (b) know that it can
 	// update state of txs, which have become unstuck
-	go pool.Pending.Prune(ctx, caughtTxsChan, confirmedTxsChan)
+	go pool.Pending.Prune(ctx, caughtTxsChan, confirmedTxsChan, notFoundTxsChan)
 	go pool.Queued.Start(ctx)
 	// (b)
 	go pool.Queued.Prune(ctx, confirmedTxsChan, alreadyInPendingPoolChan)

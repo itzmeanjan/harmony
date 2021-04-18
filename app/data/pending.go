@@ -340,7 +340,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 // Prune - Remove confirmed/ dropped txs from pending pool
 //
 // @note This method is supposed to be run as independent go routine
-func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.CaughtTxs, confirmedTxsChan chan ConfirmedTx) {
+func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.CaughtTxs, confirmedTxsChan chan<- ConfirmedTx, notFoundTxsChan chan<- listen.CaughtTxs) {
 
 	// Creating worker pool, where jobs to be submitted
 	// for concurrently checking whether tx was dropped or not
@@ -360,6 +360,7 @@ func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.Cau
 		case txs := <-caughtTxsChan:
 
 			var prunables []*MemPoolTx = make([]*MemPoolTx, 0, len(txs))
+			var notFoundTxs []*listen.CaughtTx = make([]*listen.CaughtTx, 0, len(txs))
 
 			// How & which prunable tx(s) are kept in linear memory slot `prunables`
 			// i.e. starting from where & how many of those
@@ -382,7 +383,10 @@ func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.Cau
 
 				tx := p.Get(txs[i].Hash)
 				if tx == nil {
-					// well, couldn't find tx in pool
+					// well, couldn't find tx in pool, keeping track of
+					// it in another worker, which will let us know about it
+					// when need to
+					notFoundTxs = append(notFoundTxs, txs[i])
 					continue
 				}
 
@@ -416,6 +420,13 @@ func (p *PendingPool) Prune(ctx context.Context, caughtTxsChan <-chan listen.Cau
 				// Can be GC-ed
 				CleanSlice(_prunableLocal)
 
+			}
+
+			// In current iteration, if we've found some mined txs
+			// not to be present in mempool, we're keeping track of it
+			// in different worker & let us know about it in future date
+			if len(notFoundTxs) != 0 {
+				notFoundTxsChan <- notFoundTxs
 			}
 
 			// Letting queued pool pruning worker know txs from
