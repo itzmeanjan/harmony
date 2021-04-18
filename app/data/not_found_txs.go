@@ -7,19 +7,10 @@ import (
 	"github.com/itzmeanjan/harmony/app/listen"
 )
 
-// AlreadyMinedTx - Pending pool pruner to be informed about some tx
-// it considers as pending, is actually mined, some time, which pool missed
-// because tx was added into pool, after block was mined, due to some
-// unexpected network propagation delay
-type AlreadyMinedTx struct {
-	Hash  common.Hash
-	Nonce uint64
-}
-
 // TrackNotFoundTxs - Those tx(s) which are found to be mined before actual pending tx is added
 // into mempool, are kept track of here & pending pool pruner is informed about it, when it's found
 // to be joining mempool, in some time future.
-func TrackNotFoundTxs(ctx context.Context, inPendingPoolChan <-chan *MemPoolTx, notFoundTxsChan <-chan listen.CaughtTxs, alreadyMinedTxChan chan<- AlreadyMinedTx) {
+func TrackNotFoundTxs(ctx context.Context, inPendingPoolChan <-chan *MemPoolTx, notFoundTxsChan <-chan listen.CaughtTxs, alreadyMinedTxChan chan<- listen.CaughtTxs) {
 
 	// Yes, for faster lookup, it's kept this
 	keeper := make(map[common.Hash]*listen.CaughtTx)
@@ -38,7 +29,7 @@ func TrackNotFoundTxs(ctx context.Context, inPendingPoolChan <-chan *MemPoolTx, 
 			// to be mined
 
 			if kept, ok := keeper[tx.Hash]; ok {
-				alreadyMinedTxChan <- AlreadyMinedTx{Hash: kept.Hash, Nonce: kept.Nonce}
+				alreadyMinedTxChan <- []*listen.CaughtTx{kept}
 				delete(keeper, tx.Hash)
 			}
 

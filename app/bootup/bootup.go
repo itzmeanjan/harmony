@@ -182,6 +182,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// Listens for new block headers & informs 👆 (a) for pruning
 	// txs which can be/ need to be
 	go listen.SubscribeHead(ctx, wsClient, caughtTxsChan, lastSeenBlockChan)
+	go data.TrackNotFoundTxs(ctx, inPendingPoolChan, notFoundTxsChan, caughtTxsChan)
 
 	// Passed this mempool handle to graphql query resolver
 	if err := graph.InitMemPool(pool); err != nil {
