@@ -179,9 +179,48 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	go pool.Queued.Start(ctx)
 	// (b)
 	go pool.Queued.Prune(ctx, confirmedTxsChan, alreadyInPendingPoolChan)
-	// Listens for new block headers & informs 👆 (a) for pruning
-	// txs which can be/ need to be
-	go listen.SubscribeHead(ctx, wsClient, caughtTxsChan, lastSeenBlockChan)
+
+	// This worker will supervise block header listener, so that it can keep
+	// track of their health & if they die due to some abnormal reasons
+	// it'll spawn a new one after a static delay of x time unit ( see below )
+	go func() {
+
+		var died bool
+
+		healthChan := make(chan struct{})
+		go listen.SubscribeHead(ctx, wsClient, caughtTxsChan, lastSeenBlockChan, healthChan)
+
+		for {
+
+			if died {
+				// Wait before we spawn new worker
+				<-time.After(time.Duration(5) * time.Second)
+
+				healthChan = make(chan struct{})
+				go listen.SubscribeHead(ctx, wsClient, caughtTxsChan, lastSeenBlockChan, healthChan)
+
+				died = false
+			}
+
+			select {
+
+			case <-ctx.Done():
+				return
+
+			case <-healthChan:
+				died = true
+
+			default:
+				// sleep for a while
+				<-time.After(time.Duration(1000) * time.Millisecond)
+				// and go to work again
+
+			}
+
+		}
+
+	}()
+
 	go data.TrackNotFoundTxs(ctx, inPendingPoolChan, notFoundTxsChan, caughtTxsChan)
 
 	// Passed this mempool handle to graphql query resolver
