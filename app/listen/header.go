@@ -44,7 +44,12 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan<
 			return
 
 		case err := <-subs.Err():
-			log.Printf("❗️ Block header subscription failed : %s\n", err.Error())
+			if err != nil {
+				log.Printf("❗️ Block header subscription failed : %s\n", err.Error())
+			} else {
+				log.Printf("❗️ Block header subscription failed\n")
+			}
+
 			return
 
 		case header := <-headerChan:
