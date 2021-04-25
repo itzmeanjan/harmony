@@ -188,7 +188,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		var died bool
 
 		healthChan := make(chan struct{})
-		go listen.SubscribeHead(ctx, wsClient, caughtTxsChan, lastSeenBlockChan, healthChan)
+		go listen.SubscribeHead(ctx, wsClient, pool.Pending.GetLastSeenBlock().Number, caughtTxsChan, lastSeenBlockChan, healthChan)
 
 		for {
 
@@ -197,7 +197,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 				<-time.After(time.Duration(5) * time.Second)
 
 				healthChan = make(chan struct{})
-				go listen.SubscribeHead(ctx, wsClient, caughtTxsChan, lastSeenBlockChan, healthChan)
+				go listen.SubscribeHead(ctx, wsClient, pool.Pending.GetLastSeenBlock().Number, caughtTxsChan, lastSeenBlockChan, healthChan)
 
 				died = false
 			}

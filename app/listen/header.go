@@ -25,7 +25,7 @@ type CaughtTxs []*CaughtTx
 // SubscribeHead - Subscribe to block headers & as soon as new block gets mined
 // its txs are picked up & published on a go channel, which will be listened
 // to by pending pool watcher, so that it can prune its state
-func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan<- CaughtTxs, lastSeenBlockChan chan<- uint64, healthChan chan struct{}) {
+func SubscribeHead(ctx context.Context, client *ethclient.Client, lastSeenBlock uint64, commChan chan<- CaughtTxs, lastSeenBlockChan chan<- uint64, healthChan chan struct{}) {
 
 	retryTable := make(map[*big.Int]bool)
 	headerChan := make(chan *types.Header, 64)
@@ -56,13 +56,23 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, commChan chan<
 
 		case header := <-headerChan:
 
-			if !ProcessBlock(ctx, client, header.Number, commChan, lastSeenBlockChan) {
+			// If this go routine dies in mid, supervisor will spawn a new one
+			// after some delay, which will require processing missed blocks
+			if lastSeenBlock != 0 && header.Number.Uint64()-lastSeenBlock > 1 {
 
+				for i := lastSeenBlock + 1; i < header.Number.Uint64(); i++ {
+					retryTable[big.NewInt(int64(i))] = true
+				}
+
+			}
+
+			if !ProcessBlock(ctx, client, header.Number, commChan, lastSeenBlockChan) {
 				// Put entry in table that we failed to fetch this block, to be
 				// attempted in some time future
 				retryTable[header.Number] = true
-
 			}
+
+			lastSeenBlock = header.Number.Uint64()
 
 		case <-time.After(time.Duration(1) * time.Millisecond):
 
