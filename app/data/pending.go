@@ -332,6 +332,36 @@ func (p *PendingPool) Start(ctx context.Context) {
 
 			req <- LastSeenBlock{Number: p.LastSeenBlock, At: p.LastSeenAt}
 
+		case <-time.After(time.Duration(1) * time.Millisecond):
+			// After 1 hour of keeping entries which were previously removed
+			// are now being deleted from memory, so that memory usage for keeping track of
+			// which were removed in past doesn't become a problem for us.
+			//
+			// 1 hour is just a random time period, it can be possibly improved
+			//
+			// Just hoping after 1 hour of last time this tx was seen to be added
+			// into this pool, it has been either dropped/ confirmed, so it won't
+			// be attempted to be added here again
+
+			for k := range p.DroppedTxs {
+
+				if time.Now().UTC().Sub(p.DroppedTxs[k]) > time.Duration(1)*time.Hour {
+					delete(p.DroppedTxs, k)
+				}
+
+			}
+
+		case <-time.After(time.Duration(1) * time.Millisecond):
+			// Read 👆 comment
+
+			for k := range p.RemovedTxs {
+
+				if time.Now().UTC().Sub(p.RemovedTxs[k]) > time.Duration(1)*time.Hour {
+					delete(p.RemovedTxs, k)
+				}
+
+			}
+
 		}
 
 	}

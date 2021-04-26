@@ -269,7 +269,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			// 1 hour is just a random time period, it can be possibly improved
 			//
 			// Just hoping after 1 hour of last time this tx was seen to be added
-			// into this pool, it has been either dropped/ removed/ unstuck, so it won't
+			// into this pool, it has been either dropped/ confirmed/ unstuck, so it won't
 			// be attempted to be added here again
 
 			for k := range q.DroppedTxs {
