@@ -22,8 +22,8 @@ import (
 type QueuedPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
 	TxsFromAddress    map[common.Address]TxList
-	DroppedTxs        map[common.Hash]bool
-	RemovedTxs        map[common.Hash]bool
+	DroppedTxs        map[common.Hash]time.Time
+	RemovedTxs        map[common.Hash]time.Time
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	AddTxChan         chan AddRequest
@@ -118,7 +118,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		removeTx(tx)
 		// Marking that tx has been dropped, so that
 		// it won't get picked up next time
-		q.DroppedTxs[tx.Hash] = true
+		q.DroppedTxs[tx.Hash] = time.Now().UTC()
 
 	}
 
@@ -129,19 +129,17 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		}
 
 		if _, ok := q.DroppedTxs[tx.Hash]; ok {
+			q.DroppedTxs[tx.Hash] = time.Now().UTC()
 			return false
 		}
 
 		if _, ok := q.RemovedTxs[tx.Hash]; ok {
+			q.RemovedTxs[tx.Hash] = time.Now().UTC()
 			return false
 		}
 
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
-
-			if len(q.DroppedTxs)%10 == 0 {
-				log.Printf("🧹 Dropped 10 queued txs, was about to hit limit\n")
-			}
 		}
 
 		// Marking we found this tx in mempool now
@@ -184,11 +182,14 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		case req := <-q.RemoveTxChan:
 
 			// if removed will return non-nil reference to removed tx
-			req.ResponseChan <- txRemover(req.Hash)
+			removed := txRemover(req.Hash)
+			req.ResponseChan <- removed
 
-			// Marking that tx has been removed, so that
-			// it won't get picked up next time
-			q.RemovedTxs[req.Hash] = true
+			if removed != nil {
+				// Marking that tx has been removed, so that
+				// it won't get picked up next time
+				q.RemovedTxs[req.Hash] = time.Now().UTC()
+			}
 
 		case req := <-q.TxExistsChan:
 

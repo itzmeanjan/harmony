@@ -114,8 +114,8 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	pendingPool := &data.PendingPool{
 		Transactions:             make(map[common.Hash]*data.MemPoolTx),
 		TxsFromAddress:           make(map[common.Address]data.TxList),
-		DroppedTxs:               make(map[common.Hash]bool),
-		RemovedTxs:               make(map[common.Hash]bool),
+		DroppedTxs:               make(map[common.Hash]time.Time),
+		RemovedTxs:               make(map[common.Hash]time.Time),
 		AscTxsByGasPrice:         make(data.MemPoolTxsAsc, 0, config.GetPendingPoolSize()),
 		DescTxsByGasPrice:        make(data.MemPoolTxsDesc, 0, config.GetPendingPoolSize()),
 		Done:                     0,
@@ -142,8 +142,8 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	queuedPool := &data.QueuedPool{
 		Transactions:      make(map[common.Hash]*data.MemPoolTx),
 		TxsFromAddress:    make(map[common.Address]data.TxList),
-		DroppedTxs:        make(map[common.Hash]bool),
-		RemovedTxs:        make(map[common.Hash]bool),
+		DroppedTxs:        make(map[common.Hash]time.Time),
+		RemovedTxs:        make(map[common.Hash]time.Time),
 		AscTxsByGasPrice:  make(data.MemPoolTxsAsc, 0, config.GetQueuedPoolSize()),
 		DescTxsByGasPrice: make(data.MemPoolTxsDesc, 0, config.GetQueuedPoolSize()),
 		AddTxChan:         make(chan data.AddRequest, 1),
