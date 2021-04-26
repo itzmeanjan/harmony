@@ -261,6 +261,36 @@ func (q *QueuedPool) Start(ctx context.Context) {
 
 			req.ResponseChan <- nil
 
+		case <-time.After(time.Duration(1) * time.Millisecond):
+			// After 1 hour of keeping entries which were previously removed
+			// are now being deleted from memory, so that memory usage for keeping track of
+			// which were removed in past doesn't become a problem for us.
+			//
+			// 1 hour is just a random time period, it can be possibly improved
+			//
+			// Just hoping after 1 hour of last time this tx was seen to be added
+			// into this pool, it has been either dropped/ removed/ unstuck, so it won't
+			// be attempted to be added here again
+
+			for k := range q.DroppedTxs {
+
+				if time.Now().UTC().Sub(q.DroppedTxs[k]) > time.Duration(1)*time.Hour {
+					delete(q.DroppedTxs, k)
+				}
+
+			}
+
+		case <-time.After(time.Duration(1) * time.Millisecond):
+			// Read 👆 comment
+
+			for k := range q.RemovedTxs {
+
+				if time.Now().UTC().Sub(q.RemovedTxs[k]) > time.Duration(1)*time.Hour {
+					delete(q.RemovedTxs, k)
+				}
+
+			}
+
 		}
 
 	}
