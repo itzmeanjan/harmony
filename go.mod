@@ -13,7 +13,7 @@ require (
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/go-redis/redis/v8 v8.7.0
 	github.com/gorilla/websocket v1.4.2
-	github.com/itzmeanjan/pubsub v0.1.2 // indirect
+	github.com/itzmeanjan/pubsub v0.1.2
 	github.com/labstack/echo/v4 v4.2.0
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-connmgr v0.2.4

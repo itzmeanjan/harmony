@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gammazero/workerpool"
-	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
+	"github.com/itzmeanjan/pubsub"
 )
 
 // QueuedPool - Currently present queued tx(s) i.e. these tx(s) are stuck
@@ -33,7 +33,7 @@ type QueuedPool struct {
 	CountTxsChan      chan CountRequest
 	ListTxsChan       chan ListRequest
 	TxsFromAChan      chan TxsFromARequest
-	PubSub            *redis.Client
+	PubSub            *pubsub.PubSub
 	RPC               *rpc.Client
 	PendingPool       *PendingPool
 }
@@ -147,7 +147,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		tx.Pool = "queued"
 
 		addTx(tx)
-		q.PublishAdded(ctx, q.PubSub, tx)
+		q.PublishAdded(ctx, tx)
 
 		return true
 
@@ -163,7 +163,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		tx.UnstuckAt = time.Now().UTC()
 
 		removeTx(tx)
-		q.PublishRemoved(ctx, q.PubSub, q.Transactions[txHash])
+		q.PublishRemoved(ctx, tx)
 
 		return tx
 
@@ -774,18 +774,19 @@ func (q *QueuedPool) Add(ctx context.Context, tx *MemPoolTx) bool {
 
 // PublishAdded - Publish new tx, entered queued pool, ( in messagepack serialized format )
 // to pubsub topic
-func (q *QueuedPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
+func (q *QueuedPool) PublishAdded(ctx context.Context, msg *MemPoolTx) {
 
 	_msg, err := msg.ToMessagePack()
 	if err != nil {
-
 		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
 		return
-
 	}
 
-	if err := pubsub.Publish(ctx, config.GetQueuedTxEntryPublishTopic(), _msg).Err(); err != nil {
-		log.Printf("[❗️] Failed to publish new queued tx : %s\n", err.Error())
+	if ok, _ := q.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetQueuedTxEntryPublishTopic()},
+		Data:   _msg,
+	}); !ok {
+		log.Printf("[❗️] Failed to publish new queued tx\n")
 	}
 
 }
@@ -807,18 +808,19 @@ func (q *QueuedPool) Remove(ctx context.Context, txHash common.Hash) *MemPoolTx 
 // These tx(s) are leaving queued pool i.e. they're ( probably ) going to
 // sit in pending pool now, unless they're already mined & harmony
 // failed to keep track of it
-func (q *QueuedPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
+func (q *QueuedPool) PublishRemoved(ctx context.Context, msg *MemPoolTx) {
 
 	_msg, err := msg.ToMessagePack()
 	if err != nil {
-
 		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
 		return
-
 	}
 
-	if err := pubsub.Publish(ctx, config.GetQueuedTxExitPublishTopic(), _msg).Err(); err != nil {
-		log.Printf("[❗️] Failed to publish unstuck tx : %s\n", err.Error())
+	if ok, _ := q.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetQueuedTxExitPublishTopic()},
+		Data:   _msg,
+	}); !ok {
+		log.Printf("[❗️] Failed to publish unstuck tx\n")
 	}
 
 }
