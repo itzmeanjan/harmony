@@ -30,7 +30,7 @@ func main() {
 
 	// This is application's root level context, to be passed down
 	// to worker go routines
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancel(context.Background())
 
 	resources, err := bootup.SetGround(ctx, abs)
 	if err != nil {

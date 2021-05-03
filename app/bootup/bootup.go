@@ -2,18 +2,19 @@ package bootup
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph"
 	"github.com/itzmeanjan/harmony/app/listen"
 	"github.com/itzmeanjan/harmony/app/networking"
+	"github.com/itzmeanjan/pubsub"
 )
 
 // GetNetwork - Make RPC call for reading network ID
@@ -53,34 +54,12 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
-	var options *redis.Options
+	_pubsub := pubsub.New()
+	go _pubsub.Start(ctx)
 
-	// If password is given in config file
-	if config.Get("RedisPassword") != "" {
-
-		options = &redis.Options{
-			Network:  config.Get("RedisConnection"),
-			Addr:     config.Get("RedisAddress"),
-			Password: config.Get("RedisPassword"),
-			DB:       int(config.GetRedisDBIndex()),
-		}
-
-	} else {
-		// If password is not given, attempting to connect with out it
-		//
-		// Though this is not recommended in production environment
-		options = &redis.Options{
-			Network: config.Get("RedisConnection"),
-			Addr:    config.Get("RedisAddress"),
-			DB:      int(config.GetRedisDBIndex()),
-		}
-
-	}
-
-	_redis := redis.NewClient(options)
-	// Checking whether connection was successful or not
-	if err := _redis.Ping(ctx).Err(); err != nil {
-		return nil, err
+	<-time.After(time.Duration(1) * time.Millisecond)
+	if !_pubsub.Alive {
+		return nil, errors.New("failed to start pub/sub hub")
 	}
 
 	// Passed this redis client handle to graphql query resolver
@@ -134,7 +113,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		DoneChan:                 make(chan chan uint64, 1),
 		SetLastSeenBlockChan:     lastSeenBlockChan,
 		LastSeenBlockChan:        make(chan chan data.LastSeenBlock, 1),
-		PubSub:                   _redis,
+		PubSub:                   _pubsub,
 		RPC:                      client,
 	}
 
@@ -153,7 +132,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		CountTxsChan:      make(chan data.CountRequest, 1),
 		ListTxsChan:       make(chan data.ListRequest, 1),
 		TxsFromAChan:      make(chan data.TxsFromARequest, 1),
-		PubSub:            _redis,
+		PubSub:            _pubsub,
 		RPC:               client,
 		PendingPool:       pendingPool,
 	}
@@ -242,7 +221,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		RPCClient: client,
 		WSClient:  wsClient,
 		Pool:      pool,
-		Redis:     _redis,
+		PubSub:    _pubsub,
 		StartedAt: time.Now().UTC(),
 		NetworkID: network}, nil
 
