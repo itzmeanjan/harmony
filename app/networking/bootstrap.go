@@ -26,9 +26,9 @@ func InitMemPool(pool *data.MemPool) error {
 
 }
 
-// InitRedisClient - Initializing redis client handle, so that all
-// subscriptions can be done using this client
-func InitRedisClient(client *pubsub.PubSub) error {
+// InitPubSub - Initializing pubsub handle, so that all
+// subscriptions can be managed using it
+func InitPubSub(client *pubsub.PubSub) error {
 
 	if client != nil {
 		pubsubHub = client

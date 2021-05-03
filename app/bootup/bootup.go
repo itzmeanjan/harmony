@@ -62,17 +62,14 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, errors.New("failed to start pub/sub hub")
 	}
 
-	// Passed this redis client handle to graphql query resolver
-	//
 	// To be used when subscription requests are received from clients
 	if err := graph.InitPubSub(_pubsub); err != nil {
 		return nil, err
 	}
 
-	// Redis client to be used in p2p networking communication
-	// handling section for letting clients know of some newly
-	// seen mempool tx
-	if err := networking.InitRedisClient(_pubsub); err != nil {
+	// Pubsub to be used in p2p networking handling section
+	// for letting clients know of some newly seen mempool tx
+	if err := networking.InitPubSub(_pubsub); err != nil {
 		return nil, err
 	}
 
