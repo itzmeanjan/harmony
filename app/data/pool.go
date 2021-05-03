@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/go-redis/redis/v8"
 )
 
 // MemPool - Current state of mempool, where all pending/ queued tx(s)
@@ -179,7 +178,7 @@ func (m *MemPool) Stat(start time.Time) {
 // is received from any `harmony` peer, it will be checked against latest state
 // of local mempool view, to decide whether this tx can be acted upon
 // somehow or not
-func (m *MemPool) HandleTxFromPeer(ctx context.Context, pubsub *redis.Client, tx *MemPoolTx) bool {
+func (m *MemPool) HandleTxFromPeer(ctx context.Context, tx *MemPoolTx) bool {
 
 	// Checking whether we already have this tx included in pool
 	// or not

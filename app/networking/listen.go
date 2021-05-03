@@ -6,9 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 	"log"
-	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/graph"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -28,37 +26,30 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 		buf := make([]byte, 4)
 
 		if _, err := io.ReadFull(rw.Reader, buf); err != nil {
-
 			if err == io.EOF {
 				break
 			}
 
 			log.Printf("[❗️] Failed to read size of next chunk : %s | %s\n", err.Error(), remote)
 			break
-
 		}
 
 		size := binary.LittleEndian.Uint32(buf)
-
 		chunk := make([]byte, size)
 
 		if _, err := io.ReadFull(rw.Reader, chunk); err != nil {
-
 			if err == io.EOF {
 				break
 			}
 
 			log.Printf("[❗️] Failed to read chunk from peer : %s | %s\n", err.Error(), remote)
 			break
-
 		}
 
 		tx := graph.UnmarshalPubSubMessage(chunk)
 		if tx == nil {
-
 			log.Printf("[❗️] Failed to deserialise message from peer | %s\n", remote)
 			continue
-
 		}
 
 		// Keeping entry of from which peer we received this tx
@@ -66,11 +57,9 @@ func ReadFrom(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrit
 		// when it'll be published on Pub/Sub topic
 		tx.ReceivedFrom = peerId
 
-		if memPool.HandleTxFromPeer(ctx, redisClient, tx) {
-
+		if memPool.HandleTxFromPeer(ctx, tx) {
 			log.Printf("✅ New tx from peer : %d bytes | %s\n", len(chunk), remote)
 			continue
-
 		}
 
 		log.Printf("👍 Seen tx from peer : %d bytes | %s\n", len(chunk), remote)
@@ -91,89 +80,55 @@ func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrite
 		config.GetPendingTxEntryPublishTopic(),
 		config.GetPendingTxExitPublishTopic()}
 
-	pubsub, err := graph.SubscribeToMemPool(ctx)
+	subscriber, err := graph.SubscribeToMemPool(ctx)
 	if err != nil {
-
 		log.Printf("[❗️] Failed to subscribe to mempool changes : %s\n", err.Error())
 		return
-
 	}
 
-	{
-	OUTER:
-		for {
+	for {
 
-			<-time.After(time.Millisecond * time.Duration(1))
-
-			msg, err := pubsub.ReceiveTimeout(ctx, time.Millisecond*time.Duration(9))
-			if err != nil {
-				continue
-			}
-
-			switch m := msg.(type) {
-
-			case *redis.Subscription:
-
-				// Pubsub broker informed we've been unsubscribed from
-				// this topic
-				//
-				// It's better to leave this infinite loop
-				if m.Kind == "unsubscribe" {
-					return
-				}
-
-			case *redis.Message:
-
-				msg := graph.UnmarshalPubSubMessage([]byte(m.Payload))
-				// Failed to deserialise message, we don't need
-				// to send it to remote
-				if msg == nil {
-					break
-				}
-
-				// We found this tx from this peer, so we're
-				// not sending it back
-				if msg.ReceivedFrom == peerId {
-					break
-				}
-
-				chunk := make([]byte, 4+len(m.Payload))
-
-				binary.LittleEndian.PutUint32(chunk[:4], uint32(len(m.Payload)))
-				n := copy(chunk[4:], []byte(m.Payload))
-
-				if n != len(m.Payload) {
-
-					log.Printf("[❗️] Failed to prepare chunk for peer | %s\n", remote)
-					break
-
-				}
-
-				if _, err := rw.Write(chunk); err != nil {
-
-					log.Printf("[❗️] Failed to write chunk on stream : %s | %s\n", err.Error(), remote)
-					break OUTER
-
-				}
-
-				if err := rw.Flush(); err != nil {
-
-					log.Printf("[❗️] Failed to flush stream buffer : %s | %s\n", err.Error(), remote)
-					break OUTER
-
-				}
-
-			default:
-				// @note Doing nothing yet
-
-			}
-
+		received := subscriber.Next()
+		if received == nil {
+			continue
 		}
+
+		msg := graph.UnmarshalPubSubMessage(received.Data)
+		// Failed to deserialise message, we don't need
+		// to send it to remote
+		if msg == nil {
+			continue
+		}
+
+		// We found this tx from this peer, so we're
+		// not sending it back
+		if msg.ReceivedFrom == peerId {
+			continue
+		}
+
+		chunk := make([]byte, 4+len(received.Data))
+
+		binary.LittleEndian.PutUint32(chunk[:4], uint32(len(received.Data)))
+		n := copy(chunk[4:], received.Data)
+
+		if n != len(received.Data) {
+			log.Printf("[❗️] Failed to prepare chunk for peer | %s\n", remote)
+			continue
+		}
+
+		if _, err := rw.Write(chunk); err != nil {
+			log.Printf("[❗️] Failed to write chunk on stream : %s | %s\n", err.Error(), remote)
+			break
+		}
+
+		if err := rw.Flush(); err != nil {
+			log.Printf("[❗️] Failed to flush stream buffer : %s | %s\n", err.Error(), remote)
+			break
+		}
+
 	}
 
-	if err := pubsub.Unsubscribe(context.Background(), topics...); err != nil {
-		log.Printf("[❗️] Failed to unsubscribe from Redis pubsub topic(s) : %s\n", err.Error())
-	}
+	graph.UnsubscribeFromTopic(ctx, subscriber, topics...)
 
 }
 

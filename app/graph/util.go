@@ -210,10 +210,8 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics
 	}()
 
 	if !(len(topics) > 0) {
-
 		log.Printf("[❗️] Empty topic list was unexpected\n")
 		return
-
 	}
 
 	{

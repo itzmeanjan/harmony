@@ -72,7 +72,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// Redis client to be used in p2p networking communication
 	// handling section for letting clients know of some newly
 	// seen mempool tx
-	if err := networking.InitRedisClient(_redis); err != nil {
+	if err := networking.InitRedisClient(_pubsub); err != nil {
 		return nil, err
 	}
 

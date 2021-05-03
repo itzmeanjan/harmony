@@ -11,7 +11,7 @@ require (
 	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc // indirect
 	github.com/gammazero/workerpool v1.1.1
 	github.com/go-ole/go-ole v1.2.5 // indirect
-	github.com/go-redis/redis/v8 v8.7.0
+	github.com/google/go-cmp v0.5.4 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/itzmeanjan/pubsub v0.1.2
 	github.com/labstack/echo/v4 v4.2.0
@@ -25,6 +25,8 @@ require (
 	github.com/magiconair/properties v1.8.4 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/multiformats/go-multiaddr v0.3.1
+	github.com/onsi/ginkgo v1.15.0 // indirect
+	github.com/onsi/gomega v1.10.5 // indirect
 	github.com/pelletier/go-toml v1.8.1 // indirect
 	github.com/shirou/gopsutil v3.21.2+incompatible // indirect
 	github.com/spf13/afero v1.5.1 // indirect
