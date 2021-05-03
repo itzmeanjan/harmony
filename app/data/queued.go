@@ -22,8 +22,8 @@ import (
 type QueuedPool struct {
 	Transactions      map[common.Hash]*MemPoolTx
 	TxsFromAddress    map[common.Address]TxList
-	DroppedTxs        map[common.Hash]bool
-	RemovedTxs        map[common.Hash]bool
+	DroppedTxs        map[common.Hash]time.Time
+	RemovedTxs        map[common.Hash]time.Time
 	AscTxsByGasPrice  TxList
 	DescTxsByGasPrice TxList
 	AddTxChan         chan AddRequest
@@ -118,7 +118,7 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		removeTx(tx)
 		// Marking that tx has been dropped, so that
 		// it won't get picked up next time
-		q.DroppedTxs[tx.Hash] = true
+		q.DroppedTxs[tx.Hash] = time.Now().UTC()
 
 	}
 
@@ -129,19 +129,17 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		}
 
 		if _, ok := q.DroppedTxs[tx.Hash]; ok {
+			q.DroppedTxs[tx.Hash] = time.Now().UTC()
 			return false
 		}
 
 		if _, ok := q.RemovedTxs[tx.Hash]; ok {
+			q.RemovedTxs[tx.Hash] = time.Now().UTC()
 			return false
 		}
 
 		if needToDropTxs() {
 			dropTx(pickTxWithLowestGasPrice())
-
-			if len(q.DroppedTxs)%10 == 0 {
-				log.Printf("🧹 Dropped 10 queued txs, was about to hit limit\n")
-			}
 		}
 
 		// Marking we found this tx in mempool now
@@ -184,11 +182,14 @@ func (q *QueuedPool) Start(ctx context.Context) {
 		case req := <-q.RemoveTxChan:
 
 			// if removed will return non-nil reference to removed tx
-			req.ResponseChan <- txRemover(req.Hash)
+			removed := txRemover(req.Hash)
+			req.ResponseChan <- removed
 
-			// Marking that tx has been removed, so that
-			// it won't get picked up next time
-			q.RemovedTxs[req.Hash] = true
+			if removed != nil {
+				// Marking that tx has been removed, so that
+				// it won't get picked up next time
+				q.RemovedTxs[req.Hash] = time.Now().UTC()
+			}
 
 		case req := <-q.TxExistsChan:
 
@@ -259,6 +260,36 @@ func (q *QueuedPool) Start(ctx context.Context) {
 			}
 
 			req.ResponseChan <- nil
+
+		case <-time.After(time.Duration(1) * time.Millisecond):
+			// After 1 hour of keeping entries which were previously removed
+			// are now being deleted from memory, so that memory usage for keeping track of
+			// which were removed in past doesn't become a problem for us.
+			//
+			// 1 hour is just a random time period, it can be possibly improved
+			//
+			// Just hoping after 1 hour of last time this tx was seen to be added
+			// into this pool, it has been either dropped/ confirmed/ unstuck, so it won't
+			// be attempted to be added here again
+
+			for k := range q.DroppedTxs {
+
+				if time.Now().UTC().Sub(q.DroppedTxs[k]) > time.Duration(1)*time.Hour {
+					delete(q.DroppedTxs, k)
+				}
+
+			}
+
+		case <-time.After(time.Duration(1) * time.Millisecond):
+			// Read 👆 comment
+
+			for k := range q.RemovedTxs {
+
+				if time.Now().UTC().Sub(q.RemovedTxs[k]) > time.Duration(1)*time.Hour {
+					delete(q.RemovedTxs, k)
+				}
+
+			}
 
 		}
 
