@@ -10,9 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gammazero/workerpool"
-	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/listen"
+	"github.com/itzmeanjan/pubsub"
 )
 
 // PendingPool - Currently present pending tx(s) i.e. which are ready to
@@ -40,7 +40,7 @@ type PendingPool struct {
 	DoneChan                 chan chan uint64
 	SetLastSeenBlockChan     chan uint64
 	LastSeenBlockChan        chan chan LastSeenBlock
-	PubSub                   *redis.Client
+	PubSub                   *pubsub.PubSub
 	RPC                      *rpc.Client
 }
 
@@ -163,7 +163,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 		tx.Pool = "pending"
 
 		addTx(tx)
-		p.PublishAdded(ctx, p.PubSub, tx)
+		p.PublishAdded(ctx, tx)
 
 		return true
 
@@ -193,7 +193,7 @@ func (p *PendingPool) Start(ctx context.Context) {
 		}
 
 		removeTx(tx)
-		p.PublishRemoved(ctx, p.PubSub, tx)
+		p.PublishRemoved(ctx, tx)
 
 		return true
 
@@ -1022,18 +1022,19 @@ func (p *PendingPool) VerifiedAdd(ctx context.Context, tx *MemPoolTx) bool {
 
 // PublishAdded - Publish new pending tx pool content ( in messagepack serialized format )
 // to pubsub topic
-func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
+func (p *PendingPool) PublishAdded(ctx context.Context, msg *MemPoolTx) {
 
 	_msg, err := msg.ToMessagePack()
 	if err != nil {
-
 		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
 		return
-
 	}
 
-	if err := pubsub.Publish(ctx, config.GetPendingTxEntryPublishTopic(), _msg).Err(); err != nil {
-		log.Printf("[❗️] Failed to publish new pending tx : %s\n", err.Error())
+	if ok, _ := p.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetPendingTxEntryPublishTopic()},
+		Data:   _msg,
+	}); !ok {
+		log.Printf("[❗️] Failed to publish new pending tx\n")
 	}
 
 }
@@ -1043,7 +1044,6 @@ func (p *PendingPool) PublishAdded(ctx context.Context, pubsub *redis.Client, ms
 func (p *PendingPool) Remove(ctx context.Context, txStat *TxStatus) bool {
 
 	respChan := make(chan bool)
-
 	p.RemoveTxChan <- RemoveRequest{TxStat: txStat, ResponseChan: respChan}
 
 	return <-respChan
@@ -1054,18 +1054,19 @@ func (p *PendingPool) Remove(ctx context.Context, txStat *TxStatus) bool {
 // to pubsub topic
 //
 // These tx(s) are leaving pending pool i.e. they're confirmed now
-func (p *PendingPool) PublishRemoved(ctx context.Context, pubsub *redis.Client, msg *MemPoolTx) {
+func (p *PendingPool) PublishRemoved(ctx context.Context, msg *MemPoolTx) {
 
 	_msg, err := msg.ToMessagePack()
 	if err != nil {
-
 		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
 		return
-
 	}
 
-	if err := pubsub.Publish(ctx, config.GetPendingTxExitPublishTopic(), _msg).Err(); err != nil {
-		log.Printf("[❗️] Failed to publish confirmed tx : %s\n", err.Error())
+	if ok, _ := p.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetPendingTxExitPublishTopic()},
+		Data:   _msg,
+	}); !ok {
+		log.Printf("[❗️] Failed to publish confirmed/dropped tx\n")
 	}
 
 }
