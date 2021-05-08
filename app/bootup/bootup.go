@@ -54,10 +54,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
-	_pubsub := pubsub.New()
-	go _pubsub.Start(ctx)
-
-	<-time.After(time.Duration(1) * time.Millisecond)
+	_pubsub := pubsub.New(ctx)
 	if !_pubsub.Alive {
 		return nil, errors.New("failed to start pub/sub hub")
 	}

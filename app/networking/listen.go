@@ -75,11 +75,6 @@ func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrite
 	// @note Deferred functions are executed in LIFO order
 	defer cancel()
 
-	topics := []string{config.GetQueuedTxEntryPublishTopic(),
-		config.GetQueuedTxExitPublishTopic(),
-		config.GetPendingTxEntryPublishTopic(),
-		config.GetPendingTxExitPublishTopic()}
-
 	subscriber, err := graph.SubscribeToMemPool(ctx)
 	if err != nil {
 		log.Printf("[❗️] Failed to subscribe to mempool changes : %s\n", err.Error())
@@ -128,7 +123,7 @@ func WriteTo(ctx context.Context, cancel context.CancelFunc, rw *bufio.ReadWrite
 
 	}
 
-	graph.UnsubscribeFromTopic(ctx, subscriber, topics...)
+	graph.UnsubscribeFromTopic(ctx, subscriber)
 
 }
 

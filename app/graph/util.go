@@ -105,12 +105,24 @@ func checkHash(hash string) bool {
 
 }
 
+// _pubsubCompatibleStrings - Given topics as string ( go standard type )
+// slice converts that into pubsub compatible string slice
+func _pubsubCompatibleStrings(topics []string) []pubsub.String {
+	_topics := make([]pubsub.String, 0, len(topics))
+
+	for i := 0; i < len(topics); i++ {
+		_topics = append(_topics, pubsub.String(topics[i]))
+	}
+
+	return _topics
+}
+
 // SubscribeToTopic - Subscribes to PubSub topic(s), while configuring subscription such
 // that at max 256 messages can be kept in buffer at a time. If client is consuming slowly
-// it might miss some messages when buffer stays full.
+// buffer size will be extended.
 func SubscribeToTopic(ctx context.Context, topic ...string) (*pubsub.Subscriber, error) {
 
-	_sub := pubsubHub.Subscribe(256, topic...)
+	_sub := pubsubHub.Subscribe(ctx, 256, topic...)
 	if _sub == nil {
 		return nil, errors.New("topic subscription failed")
 	}
@@ -225,7 +237,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics
 				// Denotes `harmony` is being shutdown
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), subscriber, topics...)
+				UnsubscribeFromTopic(context.Background(), subscriber)
 
 				break OUTER
 
@@ -234,7 +246,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics
 				// Denotes client is not active anymore
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), subscriber, topics...)
+				UnsubscribeFromTopic(context.Background(), subscriber)
 
 				break OUTER
 
@@ -269,18 +281,11 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics
 
 }
 
-// UnsubscribeFromTopic - Given topic name to which client is already subscribed to,
-// attempts to unsubscribe from
-func UnsubscribeFromTopic(ctx context.Context, subscriber *pubsub.Subscriber, topic ...string) {
-
-	if ok, _ := subscriber.UnsubscribeAll(pubsubHub); !ok {
+// UnsubscribeFromTopic - Unsubscribes subscriber from all topics
+func UnsubscribeFromTopic(ctx context.Context, subscriber *pubsub.Subscriber) {
+	if ok, _ := subscriber.UnsubscribeAll(); !ok {
 		log.Printf("[❗️] Failed to unsubscribe from topic(s)\n")
 	}
-
-	if !subscriber.Close() {
-		log.Printf("[❗️] Failed to destroy subscriber\n")
-	}
-
 }
 
 // UnmarshalPubSubMessage - Attempts to unmarshal message pack serialized
