@@ -1,12 +1,11 @@
 package data
 
 import (
-	"log"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/go-redis/redis/v8"
+	"github.com/itzmeanjan/pubsub"
 )
 
 // Resource - Shared resources among multiple go routines
@@ -16,7 +15,7 @@ type Resource struct {
 	RPCClient *rpc.Client
 	WSClient  *ethclient.Client
 	Pool      *MemPool
-	Redis     *redis.Client
+	PubSub    *pubsub.PubSub
 	StartedAt time.Time
 	NetworkID uint64
 }
@@ -27,8 +26,5 @@ func (r *Resource) Release() {
 
 	r.RPCClient.Close()
 	r.WSClient.Close()
-	if err := r.Redis.Close(); err != nil {
-		log.Printf("[❗️] Failed to close redis client : %s\n", err.Error())
-	}
 
 }

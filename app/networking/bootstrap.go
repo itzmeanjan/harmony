@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/data"
+	"github.com/itzmeanjan/pubsub"
 )
 
 var memPool *data.MemPool
-var redisClient *redis.Client
+var pubsubHub *pubsub.PubSub
 var connectionManager *ConnectionManager
 
 // InitMemPool - Initializing mempool handle, in this module
@@ -26,24 +26,24 @@ func InitMemPool(pool *data.MemPool) error {
 
 }
 
-// InitRedisClient - Initializing redis client handle, so that all
-// subscriptions can be done using this client
-func InitRedisClient(client *redis.Client) error {
+// InitPubSub - Initializing pubsub handle, so that all
+// subscriptions can be managed using it
+func InitPubSub(client *pubsub.PubSub) error {
 
 	if client != nil {
-		redisClient = client
+		pubsubHub = client
 		return nil
 	}
 
-	return errors.New("bad redis client received in p2p networking handler")
+	return errors.New("bad pub/sub received in p2p networking handler")
 
 }
 
 // Setup - Bootstraps `harmony`'s p2p networking stack
 func Setup(ctx context.Context, comm chan struct{}) error {
 
-	if !(memPool != nil && redisClient != nil) {
-		return errors.New("mempool/ redisClient instance not initialised")
+	if !(memPool != nil && pubsubHub != nil) {
+		return errors.New("mempool/ pubsubHub instance not initialised")
 	}
 
 	// Attempt to create a new `harmony` node
