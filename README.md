@@ -81,10 +81,6 @@ During my journey of exploring Ethereum MemPool, I found good initiative from [B
 ## Prerequisite
 
 - Make sure you've _`Go ( >= 1.16)`_, _`make`_ installed
-- You need to also have _`Redis ( >= 5.x )`_
-
-> Note : Consider setting up Redis instance with password protection
-
 - Get one Ethereum Node up & running, with `txpool` RPC API enabled. You can always use SaaS Ethereum node.
 
 ## Installation
@@ -112,10 +108,6 @@ PendingTxEntryTopic=pending_pool_entry
 PendingTxExitTopic=pending_pool_exit
 QueuedTxEntryTopic=queued_pool_entry
 QueuedTxExitTopic=queued_pool_exit
-RedisConnection=tcp
-RedisAddress=127.0.0.1:6379
-RedisPassword=password
-RedisDB=1
 ConcurrencyFactor=10
 Port=7000
 ```
@@ -127,14 +119,10 @@ WSUrl | To be used for listening to newly mined block headers
 MemPoolPollingPeriod | RPC node's mempool to be checked every `X` milliseconds
 PendingPoolSize | #-of pending tx(s) to be kept in-memory at a time
 QueuedPoolSize | #-of queued tx(s) to be kept in-memory at a time
-PendingTxEntryTopic | Whenever tx enters pending pool, it'll be published on Redis topic `t`
-PendingTxExitTopic | Whenever tx leaves pending pool, it'll be published on Redis topic `t`
-QueuedTxEntryTopic | Whenever tx enters queued pool, it'll be published on Redis topic `t`
-QueuedTxExitTopic | Whenever tx leaves queued pool, it'll be published on Redis topic `t`
-RedisConnection | Communicate with Redis over transport protocol
-RedisAddress | `address:port` combination of Redis
-RedisPassword | Authentication details for talking to Redis. **[ Not mandatory ]**
-RedisDB | Redis database to be used. **[ By default there're 16 of them ]**
+PendingTxEntryTopic | Whenever tx enters pending pool, it'll be published on Pub/Sub topic `t`
+PendingTxExitTopic | Whenever tx leaves pending pool, it'll be published on Pub/Sub topic `t`
+QueuedTxEntryTopic | Whenever tx enters queued pool, it'll be published on Pub/Sub topic `t`
+QueuedTxExitTopic | Whenever tx leaves queued pool, it'll be published on Pub/Sub topic `t`
 ConcurrencyFactor | Whenever concurrency can be leveraged, `harmony` will create worker pool with `#-of logical CPUs x ConcurrencyFactor` go routines. **[ Can be float too ]**
 Port | Starts HTTP server on this port ( > 1024 )
 
@@ -157,7 +145,7 @@ NetworkingStream=this-is-stream
 NetworkingBootstrap=
 ```
 
-As `harmony` nodes will form a P2P network, you need to **first** switch networking on, by setting `NetworkingEnabled` to `true` ( default value is `false` ). 
+As `harmony` nodes will form a P2P mesh network, you need to **first** switch networking on, by setting `NetworkingEnabled` to `true` ( default value is `false` ).
 
 > If you explicitly set this field to `false`, all `Networking*` fields to be ignored.
 
@@ -186,8 +174,6 @@ This way you can keep adding `N`-many nodes to your cluster.
 
 ✅ **This is recommended practice, but you can always test multi-node set up, while relying on same Ethereum Node. In that case your interest can be putting all these `harmony` instances behind load balancer & serving client requests in better fashion & it's perfectly okay.**
 
-> ❗️ If you're using same Redis instance for multiple `harmony` nodes, make sure you've changed DB identifier or Pub/Sub topic names, to avoid any kind of clash.
-
 ---
 
 - Let's build & run `harmony`
@@ -215,18 +201,24 @@ You'll receive response like 👇
 
 ```json
 {
-  "pendingPoolSize": 67,
-  "queuedPoolSize": 0,
-  "uptime": "29.214603s",
-  "networkID": 137
+  "pendingPoolSize": 257530,
+  "queuedPoolSize": 55278,
+  "uptime": "271h54m7.240520958s",
+  "processed": 15808071,
+  "latestBlock": 12359655,
+  "latestSeenAgo": "8.46197605s",
+  "networkID": 1
 }
 ```
 
 Field | Interpretation
 --- | ---
 pendingPoolSize | Currently these many tx(s) are in pending state i.e. waiting to be picked up by some miner when next block gets mined
-queuedPoolSize | These tx(s) are stuck, will only be eligible for mining when lower nonce tx(s) of same wallet gets mined
+queuedPoolSize | These tx(s) are stuck, will only be eligible for mining when lower nonce tx(s) of same wallet joins pending pool
 uptime | This mempool monitoring engine is alive for last `t` time unit
+processed | Mempool has seen `N` tx(s) getting confirmed/ dropped i.e. permanently leaving pool
+latestBlock | Last block, mempool heard of, from RPC Node
+lastestSeenAgo | Last block was seen `t` time unit ago
 networkID | The mempool monitoring engine keeps track of mempool of this network
 
 ### Mempool

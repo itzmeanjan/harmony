@@ -7,14 +7,14 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph/model"
+	"github.com/itzmeanjan/pubsub"
 )
 
 var memPool *data.MemPool
-var redisClient *redis.Client
+var pubsubHub *pubsub.PubSub
 var parentCtx context.Context
 
 // InitMemPool - Initializing mempool handle, in this module
@@ -30,16 +30,15 @@ func InitMemPool(pool *data.MemPool) error {
 
 }
 
-// InitRedisClient - Initializing redis client handle, so that all
-// subscriptions can be done using this client
-func InitRedisClient(client *redis.Client) error {
+// InitPubSub - Initializing pubsub handle, for managing subscriptions
+func InitPubSub(client *pubsub.PubSub) error {
 
 	if client != nil {
-		redisClient = client
+		pubsubHub = client
 		return nil
 	}
 
-	return errors.New("bad redis client received in graphQL handler")
+	return errors.New("bad pub/sub received in graphQL handler")
 
 }
 
@@ -106,19 +105,29 @@ func checkHash(hash string) bool {
 
 }
 
-// SubscribeToTopic - Subscribes to Redis topic(s), with context of caller
-// while waiting for subscription confirmation
-func SubscribeToTopic(ctx context.Context, topic ...string) (*redis.PubSub, error) {
+// _pubsubCompatibleStrings - Given topics as string ( go standard type )
+// slice converts that into pubsub compatible string slice
+func _pubsubCompatibleStrings(topics []string) []pubsub.String {
+	_topics := make([]pubsub.String, 0, len(topics))
 
-	_pubsub := redisClient.Subscribe(ctx, topic...)
-
-	// Waiting for subscription confirmation
-	_, err := _pubsub.Receive(ctx)
-	if err != nil {
-		return nil, err
+	for i := 0; i < len(topics); i++ {
+		_topics = append(_topics, pubsub.String(topics[i]))
 	}
 
-	return _pubsub, nil
+	return _topics
+}
+
+// SubscribeToTopic - Subscribes to PubSub topic(s), while configuring subscription such
+// that at max 256 messages can be kept in buffer at a time. If client is consuming slowly
+// buffer size will be extended.
+func SubscribeToTopic(ctx context.Context, topic ...string) (*pubsub.Subscriber, error) {
+
+	_sub := pubsubHub.Subscribe(ctx, 256, topic...)
+	if _sub == nil {
+		return nil, errors.New("topic subscription failed")
+	}
+
+	return _sub, nil
 
 }
 
@@ -126,7 +135,7 @@ func SubscribeToTopic(ctx context.Context, topic ...string) (*redis.PubSub, erro
 // happening in pending tx pool
 //
 // When tx joins/ leaves pending pool, subscribers will receive notification
-func SubscribeToPendingPool(ctx context.Context) (*redis.PubSub, error) {
+func SubscribeToPendingPool(ctx context.Context) (*pubsub.Subscriber, error) {
 
 	return SubscribeToTopic(ctx, config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic())
 
@@ -139,7 +148,7 @@ func SubscribeToPendingPool(ctx context.Context) (*redis.PubSub, error) {
 //
 // @note Tx(s) generally join queued pool, when there's nonce gap & this tx can't be
 // processed until some lower nonce tx(s) get(s) processed
-func SubscribeToQueuedPool(ctx context.Context) (*redis.PubSub, error) {
+func SubscribeToQueuedPool(ctx context.Context) (*pubsub.Subscriber, error) {
 
 	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic())
 
@@ -153,7 +162,7 @@ func SubscribeToQueuedPool(ctx context.Context) (*redis.PubSub, error) {
 //
 // It'll subscribe to all 4 topics for listening
 // to tx(s) entering/ leaving any portion of mempool
-func SubscribeToMemPool(ctx context.Context) (*redis.PubSub, error) {
+func SubscribeToMemPool(ctx context.Context) (*pubsub.Subscriber, error) {
 
 	return SubscribeToTopic(ctx,
 		config.GetQueuedTxEntryPublishTopic(),
@@ -165,7 +174,7 @@ func SubscribeToMemPool(ctx context.Context) (*redis.PubSub, error) {
 
 // SubscribeToPendingTxEntry - Subscribe to topic where new pending tx(s)
 // are published
-func SubscribeToPendingTxEntry(ctx context.Context) (*redis.PubSub, error) {
+func SubscribeToPendingTxEntry(ctx context.Context) (*pubsub.Subscriber, error) {
 
 	return SubscribeToTopic(ctx, config.GetPendingTxEntryPublishTopic())
 
@@ -173,7 +182,7 @@ func SubscribeToPendingTxEntry(ctx context.Context) (*redis.PubSub, error) {
 
 // SubscribeToQueuedTxEntry - Subscribe to topic where new queued tx(s)
 // are published
-func SubscribeToQueuedTxEntry(ctx context.Context) (*redis.PubSub, error) {
+func SubscribeToQueuedTxEntry(ctx context.Context) (*pubsub.Subscriber, error) {
 
 	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic())
 
@@ -181,7 +190,7 @@ func SubscribeToQueuedTxEntry(ctx context.Context) (*redis.PubSub, error) {
 
 // SubscribeToPendingTxExit - Subscribe to topic where pending tx(s), getting
 // confirmed are published
-func SubscribeToPendingTxExit(ctx context.Context) (*redis.PubSub, error) {
+func SubscribeToPendingTxExit(ctx context.Context) (*pubsub.Subscriber, error) {
 
 	return SubscribeToTopic(ctx, config.GetPendingTxExitPublishTopic())
 
@@ -189,7 +198,7 @@ func SubscribeToPendingTxExit(ctx context.Context) (*redis.PubSub, error) {
 
 // SubscribeToQueuedTxExit - Subscribe to topic where queued tx(s), getting
 // unstuck are published
-func SubscribeToQueuedTxExit(ctx context.Context) (*redis.PubSub, error) {
+func SubscribeToQueuedTxExit(ctx context.Context) (*pubsub.Subscriber, error) {
 
 	return SubscribeToTopic(ctx, config.GetQueuedTxExitPublishTopic())
 
@@ -206,17 +215,15 @@ func SubscribeToQueuedTxExit(ctx context.Context) (*redis.PubSub, error) {
 //
 // You can always blindly return `true` in your `evaluationCriteria` function,
 // so that you get to receive any tx being published on topic of your interest
-func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
+func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics []string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
 
 	defer func() {
 		close(comm)
 	}()
 
 	if !(len(topics) > 0) {
-
 		log.Printf("[❗️] Empty topic list was unexpected\n")
 		return
-
 	}
 
 	{
@@ -230,7 +237,7 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 				// Denotes `harmony` is being shutdown
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), pubsub, topics...)
+				UnsubscribeFromTopic(context.Background(), subscriber)
 
 				break OUTER
 
@@ -239,52 +246,31 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 				// Denotes client is not active anymore
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), pubsub, topics...)
+				UnsubscribeFromTopic(context.Background(), subscriber)
 
 				break OUTER
 
 			default:
 
-				// If client is still active, we'll reach here in
-				// 10 ms & continue to read message published, if any
-
-				msg, err := pubsub.ReceiveTimeout(ctx, time.Millisecond*time.Duration(10))
-				if err != nil {
-					continue
+				// Read next message
+				received := subscriber.Next()
+				if received == nil {
+					break
 				}
 
-				switch m := msg.(type) {
+				// New message has been published on topic
+				// of our interest, we'll attempt to deserialize
+				// data to deliver it to client in expected format
+				message := UnmarshalPubSubMessage(received.Data)
+				if message != nil && pubCriteria(message, params...) {
 
-				case *redis.Subscription:
-
-					// Pubsub broker informed we've been unsubscribed from
-					// this topic
-					//
-					// It's better to leave this infinite loop
-					if m.Kind == "unsubscribe" {
-						break OUTER
+					// Only publish non-nil data i.e. if (de)-serialisation
+					// fails some how, it's better to send nothing, rather than
+					// sending client `nil`
+					sendable := message.ToGraphQL()
+					if sendable != nil {
+						comm <- sendable
 					}
-
-				case *redis.Message:
-
-					// New message has been published on topic
-					// of our interest, we'll attempt to deserialize
-					// data to deliver it to client in expected format
-					message := UnmarshalPubSubMessage([]byte(m.Payload))
-					if message != nil && pubCriteria(message, params...) {
-
-						// Only publish non-nil data i.e. if (de)-serialisation
-						// fails some how, it's better to send nothing, rather than
-						// sending client `nil`
-						sendable := message.ToGraphQL()
-						if sendable != nil {
-							comm <- sendable
-						}
-
-					}
-
-				default:
-					// @note Doing nothing yet
 
 				}
 
@@ -295,16 +281,11 @@ func ListenToMessages(ctx context.Context, pubsub *redis.PubSub, topics []string
 
 }
 
-// UnsubscribeFromTopic - Given topic name to which client is already subscribed to,
-// attempts to unsubscribe from
-func UnsubscribeFromTopic(ctx context.Context, pubsub *redis.PubSub, topic ...string) {
-
-	if err := pubsub.Unsubscribe(ctx, topic...); err != nil {
-
-		log.Printf("[❗️] Failed to unsubscribe from Redis pubsub topic(s) : %s\n", err.Error())
-
+// UnsubscribeFromTopic - Unsubscribes subscriber from all topics
+func UnsubscribeFromTopic(ctx context.Context, subscriber *pubsub.Subscriber) {
+	if ok, _ := subscriber.UnsubscribeAll(); !ok {
+		log.Printf("[❗️] Failed to unsubscribe from topic(s)\n")
 	}
-
 }
 
 // UnmarshalPubSubMessage - Attempts to unmarshal message pack serialized

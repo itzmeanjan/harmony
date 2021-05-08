@@ -4,7 +4,6 @@ import (
 	"log"
 	"math"
 	"runtime"
-	"strconv"
 
 	"github.com/spf13/viper"
 )
@@ -127,24 +126,6 @@ func GetQueuedTxExitPublishTopic() string {
 
 	log.Printf("[❗️] Failed to get topic for publishing tx removed from queued pool, using `queued_pool_exit`\n")
 	return "queued_pool_exit"
-
-}
-
-// GetRedisDBIndex - Read desired redis database index, which
-// user asked `harmony` to use
-//
-// If nothing is provided, it'll use `1`, by default
-func GetRedisDBIndex() uint8 {
-
-	db := Get("RedisDB")
-
-	_db, err := strconv.ParseUint(db, 10, 8)
-	if err != nil {
-		log.Printf("[❗️] Failed to parse redis database index : `%s`, using 1\n", err.Error())
-		return 1
-	}
-
-	return uint8(_db)
 
 }
 
