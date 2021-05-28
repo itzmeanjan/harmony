@@ -27,7 +27,8 @@ type CaughtTxs []*CaughtTx
 // to by pending pool watcher, so that it can prune its state
 func SubscribeHead(ctx context.Context, client *ethclient.Client, lastSeenBlock uint64, commChan chan<- CaughtTxs, lastSeenBlockChan chan<- uint64, healthChan chan struct{}) {
 
-	retryTable := make(map[*big.Int]bool)
+	retryTable := make(map[*big.Int]struct{})
+	lastRetried := time.Now()
 	headerChan := make(chan *types.Header, 64)
 	subs, err := client.SubscribeNewHead(ctx, headerChan)
 	if err != nil {
@@ -61,7 +62,7 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, lastSeenBlock 
 			if lastSeenBlock != 0 && header.Number.Uint64()-lastSeenBlock > 1 {
 
 				for i := lastSeenBlock + 1; i < header.Number.Uint64(); i++ {
-					retryTable[big.NewInt(int64(i))] = true
+					retryTable[big.NewInt(int64(i))] = struct{}{}
 				}
 
 			}
@@ -69,12 +70,16 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, lastSeenBlock 
 			if !ProcessBlock(ctx, client, header.Number, commChan, lastSeenBlockChan) {
 				// Put entry in table that we failed to fetch this block, to be
 				// attempted in some time future
-				retryTable[header.Number] = true
+				retryTable[header.Number] = struct{}{}
 			}
 
 			lastSeenBlock = header.Number.Uint64()
 
-		case <-time.After(time.Duration(1) * time.Millisecond):
+		case <-time.After(time.Duration(64) * time.Millisecond):
+
+			if !(time.Since(lastRetried) > time.Duration(2)*time.Minute) {
+				break
+			}
 
 			pendingC := len(retryTable)
 			if pendingC == 0 {
@@ -82,25 +87,15 @@ func SubscribeHead(ctx context.Context, client *ethclient.Client, lastSeenBlock 
 			}
 
 			log.Printf("🔁 Retrying %d block(s)\n", pendingC)
+			lastRetried = time.Now()
 
-			success := make([]*big.Int, 0, pendingC)
+			successC := 0
 			for num := range retryTable {
-
 				if ProcessBlock(ctx, client, num, commChan, lastSeenBlockChan) {
-					success = append(success, num)
+					delete(retryTable, num)
+					successC++
 				}
-
 			}
-
-			successC := len(success)
-			if successC == 0 {
-				break
-			}
-
-			for i := 0; i < len(success); i++ {
-				delete(retryTable, success[i])
-			}
-
 			log.Printf("🎉 Processed %d pending block(s)\n", successC)
 
 		}
