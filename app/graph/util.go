@@ -105,24 +105,12 @@ func checkHash(hash string) bool {
 
 }
 
-// _pubsubCompatibleStrings - Given topics as string ( go standard type )
-// slice converts that into pubsub compatible string slice
-func _pubsubCompatibleStrings(topics []string) []pubsub.String {
-	_topics := make([]pubsub.String, 0, len(topics))
-
-	for i := 0; i < len(topics); i++ {
-		_topics = append(_topics, pubsub.String(topics[i]))
-	}
-
-	return _topics
-}
-
 // SubscribeToTopic - Subscribes to PubSub topic(s), while configuring subscription such
 // that at max 256 messages can be kept in buffer at a time. If client is consuming slowly
 // buffer size will be extended.
 func SubscribeToTopic(ctx context.Context, topic ...string) (*pubsub.Subscriber, error) {
 
-	_sub := pubsubHub.Subscribe(ctx, 256, topic...)
+	_sub := pubsubHub.Subscribe(256, topic...)
 	if _sub == nil {
 		return nil, errors.New("topic subscription failed")
 	}
@@ -215,15 +203,30 @@ func SubscribeToQueuedTxExit(ctx context.Context) (*pubsub.Subscriber, error) {
 //
 // You can always blindly return `true` in your `evaluationCriteria` function,
 // so that you get to receive any tx being published on topic of your interest
-func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics []string, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
+func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
 
 	defer func() {
 		close(comm)
 	}()
 
-	if !(len(topics) > 0) {
-		log.Printf("[❗️] Empty topic list was unexpected\n")
-		return
+	consume := func(msg *pubsub.PublishedMessage) {
+		unmarshalled := UnmarshalPubSubMessage(msg.Data)
+		if unmarshalled == nil || !pubCriteria(unmarshalled, params...) {
+			return
+		}
+
+		// Only publish non-nil data i.e. if (de)-serialisation
+		// fails some how, it's better to send nothing, rather than
+		// sending client `nil`
+		if sendable := unmarshalled.ToGraphQL(); sendable != nil {
+			// Client must be ready to accept message
+			// It doesn't block if it finds not enough buffer
+			// space available in channel between
+			// server & subscriber ( graphql client )
+			if len(comm) < cap(comm) {
+				comm <- sendable
+			}
+		}
 	}
 
 	{
@@ -233,47 +236,42 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics
 			select {
 
 			case <-parentCtx.Done():
-
 				// Denotes `harmony` is being shutdown
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), subscriber)
-
+				subscriber.UnsubscribeAll()
 				break OUTER
 
 			case <-ctx.Done():
-
 				// Denotes client is not active anymore
 				//
 				// We must unsubscribe from all topics & get out of this infinite loop
-				UnsubscribeFromTopic(context.Background(), subscriber)
-
+				subscriber.UnsubscribeAll()
 				break OUTER
 
-			default:
-
-				// Read next message
+			case <-subscriber.Listener():
+				// Listening for message availablity
+				// signal
 				received := subscriber.Next()
 				if received == nil {
 					break
 				}
+				consume(received)
 
-				// New message has been published on topic
-				// of our interest, we'll attempt to deserialize
-				// data to deliver it to client in expected format
-				message := UnmarshalPubSubMessage(received.Data)
-				if message != nil && pubCriteria(message, params...) {
+			default:
 
-					// Only publish non-nil data i.e. if (de)-serialisation
-					// fails some how, it's better to send nothing, rather than
-					// sending client `nil`
-					sendable := message.ToGraphQL()
-					if sendable != nil {
-						comm <- sendable
-					}
-
+				if !subscriber.Consumable() {
+					break
 				}
 
+				started := time.Now()
+				for received := subscriber.Next(); received != nil; {
+					consume(received)
+
+					if time.Since(started) > time.Duration(256)*time.Millisecond {
+						break
+					}
+				}
 			}
 
 		}
@@ -283,9 +281,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, topics
 
 // UnsubscribeFromTopic - Unsubscribes subscriber from all topics
 func UnsubscribeFromTopic(ctx context.Context, subscriber *pubsub.Subscriber) {
-	if ok, _ := subscriber.UnsubscribeAll(); !ok {
-		log.Printf("[❗️] Failed to unsubscribe from topic(s)\n")
-	}
+	subscriber.UnsubscribeAll()
 }
 
 // UnmarshalPubSubMessage - Attempts to unmarshal message pack serialized

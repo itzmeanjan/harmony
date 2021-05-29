@@ -782,12 +782,10 @@ func (q *QueuedPool) PublishAdded(ctx context.Context, msg *MemPoolTx) {
 		return
 	}
 
-	if ok, _ := q.PubSub.Publish(&pubsub.Message{
-		Topics: []pubsub.String{pubsub.String(config.GetQueuedTxEntryPublishTopic())},
+	q.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetQueuedTxEntryPublishTopic()},
 		Data:   _msg,
-	}); !ok {
-		log.Printf("[❗️] Failed to publish new queued tx\n")
-	}
+	})
 
 }
 
@@ -816,12 +814,10 @@ func (q *QueuedPool) PublishRemoved(ctx context.Context, msg *MemPoolTx) {
 		return
 	}
 
-	if ok, _ := q.PubSub.Publish(&pubsub.Message{
-		Topics: []pubsub.String{pubsub.String(config.GetQueuedTxExitPublishTopic())},
+	q.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetQueuedTxExitPublishTopic()},
 		Data:   _msg,
-	}); !ok {
-		log.Printf("[❗️] Failed to publish unstuck tx\n")
-	}
+	})
 
 }
 
