@@ -2,7 +2,7 @@ package bootup
 
 import (
 	"context"
-	"errors"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -54,10 +54,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
-	_pubsub := pubsub.New(ctx)
-	if !_pubsub.IsAlive() {
-		return nil, errors.New("failed to start pub/sub hub")
-	}
+	_pubsub := pubsub.New(uint64(runtime.NumCPU()))
 
 	// To be used when subscription requests are received from clients
 	if err := graph.InitPubSub(_pubsub); err != nil {

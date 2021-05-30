@@ -1030,12 +1030,10 @@ func (p *PendingPool) PublishAdded(ctx context.Context, msg *MemPoolTx) {
 		return
 	}
 
-	if ok, _ := p.PubSub.Publish(&pubsub.Message{
-		Topics: []pubsub.String{pubsub.String(config.GetPendingTxEntryPublishTopic())},
+	p.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetPendingTxEntryPublishTopic()},
 		Data:   _msg,
-	}); !ok {
-		log.Printf("[❗️] Failed to publish new pending tx\n")
-	}
+	})
 
 }
 
@@ -1062,12 +1060,10 @@ func (p *PendingPool) PublishRemoved(ctx context.Context, msg *MemPoolTx) {
 		return
 	}
 
-	if ok, _ := p.PubSub.Publish(&pubsub.Message{
-		Topics: []pubsub.String{pubsub.String(config.GetPendingTxExitPublishTopic())},
+	p.PubSub.Publish(&pubsub.Message{
+		Topics: []string{config.GetPendingTxExitPublishTopic()},
 		Data:   _msg,
-	}); !ok {
-		log.Printf("[❗️] Failed to publish confirmed/dropped tx\n")
-	}
+	})
 
 }
 
