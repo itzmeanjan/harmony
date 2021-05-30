@@ -228,6 +228,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm c
 			}
 		}
 	}
+	duration := time.Duration(256) * time.Millisecond
 
 	{
 	OUTER:
@@ -258,7 +259,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm c
 				}
 				consume(received)
 
-			default:
+			case <-time.After(duration):
 
 				if !subscriber.Consumable() {
 					break
@@ -268,7 +269,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm c
 				for received := subscriber.Next(); received != nil; {
 					consume(received)
 
-					if time.Since(started) > time.Duration(256)*time.Millisecond {
+					if time.Since(started) > duration {
 						break
 					}
 				}
