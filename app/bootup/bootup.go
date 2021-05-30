@@ -2,7 +2,6 @@ package bootup
 
 import (
 	"context"
-	"runtime"
 	"strconv"
 	"time"
 
@@ -14,14 +13,12 @@ import (
 	"github.com/itzmeanjan/harmony/app/graph"
 	"github.com/itzmeanjan/harmony/app/listen"
 	"github.com/itzmeanjan/harmony/app/networking"
-	"github.com/itzmeanjan/pubsub"
+	"github.com/itzmeanjan/pub0sub/publisher"
 )
 
 // GetNetwork - Make RPC call for reading network ID
 func GetNetwork(ctx context.Context, rpc *rpc.Client) (uint64, error) {
-
 	var result string
-
 	if err := rpc.CallContext(ctx, &result, "net_version"); err != nil {
 		return 0, err
 	}
@@ -32,7 +29,6 @@ func GetNetwork(ctx context.Context, rpc *rpc.Client) (uint64, error) {
 	}
 
 	return _result, nil
-
 }
 
 // SetGround - This is to be called when starting application
@@ -54,16 +50,8 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		return nil, err
 	}
 
-	_pubsub := pubsub.New(uint64(runtime.NumCPU()))
-
-	// To be used when subscription requests are received from clients
-	if err := graph.InitPubSub(_pubsub); err != nil {
-		return nil, err
-	}
-
-	// Pubsub to be used in p2p networking handling section
-	// for letting clients know of some newly seen mempool tx
-	if err := networking.InitPubSub(_pubsub); err != nil {
+	publisher, err := publisher.New(ctx, "tcp", config.GetPub0SubAddress())
+	if err != nil {
 		return nil, err
 	}
 
@@ -104,7 +92,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		DoneChan:                 make(chan chan uint64, 1),
 		SetLastSeenBlockChan:     lastSeenBlockChan,
 		LastSeenBlockChan:        make(chan chan data.LastSeenBlock, 1),
-		PubSub:                   _pubsub,
+		PubSub:                   publisher,
 		RPC:                      client,
 	}
 
@@ -123,7 +111,7 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 		CountTxsChan:      make(chan data.CountRequest, 1),
 		ListTxsChan:       make(chan data.ListRequest, 1),
 		TxsFromAChan:      make(chan data.TxsFromARequest, 1),
-		PubSub:            _pubsub,
+		PubSub:            publisher,
 		RPC:               client,
 		PendingPool:       pendingPool,
 	}
@@ -207,12 +195,13 @@ func SetGround(ctx context.Context, file string) (*data.Resource, error) {
 	// Passing parent context to graphQL subscribers, so that
 	// graceful system shutdown can be performed
 	graph.InitParentContext(ctx)
+	// Same for p2p networking stack
+	networking.InitParentContext(ctx)
 
 	return &data.Resource{
 		RPCClient: client,
 		WSClient:  wsClient,
 		Pool:      pool,
-		PubSub:    _pubsub,
 		StartedAt: time.Now().UTC(),
 		NetworkID: network}, nil
 

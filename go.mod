@@ -8,12 +8,12 @@ require (
 	github.com/agnivade/levenshtein v1.1.0 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/ethereum/go-ethereum v1.10.1
-	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc // indirect
-	github.com/gammazero/workerpool v1.1.1
+	github.com/gammazero/workerpool v1.1.2
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/google/go-cmp v0.5.4 // indirect
 	github.com/gorilla/websocket v1.4.2
-	github.com/itzmeanjan/pubsub v0.1.7
+	github.com/itzmeanjan/pub0sub v0.2.1
+	github.com/itzmeanjan/pubsub v0.1.7 // indirect
 	github.com/labstack/echo/v4 v4.2.0
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-connmgr v0.2.4

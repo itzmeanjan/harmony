@@ -5,45 +5,35 @@ import (
 	"errors"
 
 	"github.com/itzmeanjan/harmony/app/data"
-	"github.com/itzmeanjan/pubsub"
 )
 
 var memPool *data.MemPool
-var pubsubHub *pubsub.PubSub
+var parentCtx context.Context
 var connectionManager *ConnectionManager
 
 // InitMemPool - Initializing mempool handle, in this module
 // so that it can be used updating local mempool state, when new
 // deserialisable tx chunk is received from any peer, over p2p network
 func InitMemPool(pool *data.MemPool) error {
-
 	if pool != nil {
 		memPool = pool
 		return nil
 	}
 
 	return errors.New("bad mempool received in p2p networking handler")
-
 }
 
-// InitPubSub - Initializing pubsub handle, so that all
-// subscriptions can be managed using it
-func InitPubSub(client *pubsub.PubSub) error {
-
-	if client != nil {
-		pubsubHub = client
-		return nil
-	}
-
-	return errors.New("bad pub/sub received in p2p networking handler")
-
+// To be used for listening to event when `harmony` asks its
+// workers to stop gracefully
+func InitParentContext(ctx context.Context) {
+	parentCtx = ctx
 }
 
 // Setup - Bootstraps `harmony`'s p2p networking stack
 func Setup(ctx context.Context, comm chan struct{}) error {
 
-	if !(memPool != nil && pubsubHub != nil) {
-		return errors.New("mempool/ pubsubHub instance not initialised")
+	if memPool == nil {
+		return errors.New("mempool instance not initialised")
 	}
 
 	// Attempt to create a new `harmony` node
@@ -66,5 +56,4 @@ func Setup(ctx context.Context, comm chan struct{}) error {
 	go connectionManager.Start(ctx)
 
 	return nil
-
 }
