@@ -758,6 +758,58 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 
 }
 
+// HigherThanX - Returns a list of queued txs which are paid with
+// gas price > `X`
+func (q *QueuedPool) HigherThanX(x float64) []*MemPoolTx {
+	txs := q.DescListTxs()
+	if txs == nil {
+		return nil
+	}
+
+	txCount := uint64(len(txs))
+	result := make([]*MemPoolTx, 0, txCount)
+
+	for i := 0; i < len(txs); i++ {
+		// Stop ASAP, because iterating over
+		// descending sorted ( w.r.t. gas price )
+		// tx list
+		if !txs[i].HasGasPriceMoreThan(x) {
+			break
+		}
+
+		result = append(result, txs[i])
+	}
+
+	CleanSlice(txs)
+	return result
+}
+
+// LowerThanX - Returns a list of queued txs which are paid with
+// gas price < `X`
+func (q *QueuedPool) LowerThanX(x float64) []*MemPoolTx {
+	txs := q.AscListTxs()
+	if txs == nil {
+		return nil
+	}
+
+	txCount := uint64(len(txs))
+	result := make([]*MemPoolTx, 0, txCount)
+
+	for i := 0; i < len(txs); i++ {
+		// Stop ASAP, because iterating over
+		// ascending sorted ( w.r.t. gas price )
+		// tx list
+		if !txs[i].HasGasPriceLessThan(x) {
+			break
+		}
+
+		result = append(result, txs[i])
+	}
+
+	CleanSlice(txs)
+	return result
+}
+
 // Add - Attempts to add new tx found in pending pool into
 // harmony mempool, so that further manipulation can be performed on it
 //
