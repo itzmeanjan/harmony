@@ -102,6 +102,8 @@ func (m *MemPool) QueuedForLTE(x time.Duration) []*MemPoolTx {
 	return m.Queued.FresherThanX(x)
 }
 
+func (m *MemPool) PendingWithGTE() {}
+
 // PendingFrom - List of tx(s) pending from address
 //
 // @note These are going to be same nonce tx(s), only one of them will

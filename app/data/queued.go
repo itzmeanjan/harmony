@@ -759,7 +759,7 @@ func (q *QueuedPool) FresherThanX(x time.Duration) []*MemPoolTx {
 }
 
 // HigherThanX - Returns a list of queued txs which are paid with
-// gas price > `X`
+// gas price >= `X`
 func (q *QueuedPool) HigherThanX(x float64) []*MemPoolTx {
 	txs := q.DescListTxs()
 	if txs == nil {
@@ -785,7 +785,7 @@ func (q *QueuedPool) HigherThanX(x float64) []*MemPoolTx {
 }
 
 // LowerThanX - Returns a list of queued txs which are paid with
-// gas price < `X`
+// gas price <= `X`
 func (q *QueuedPool) LowerThanX(x float64) []*MemPoolTx {
 	txs := q.AscListTxs()
 	if txs == nil {

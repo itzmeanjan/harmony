@@ -188,7 +188,7 @@ func (m *MemPoolTx) IsUnstuck(ctx context.Context, rpc *rpc.Client) (bool, error
 }
 
 // HasGasPriceMoreThan - Returns true if gas price of this tx
-// is more than `X`
+// is more than or equals to `X`
 func (m *MemPoolTx) HasGasPriceMoreThan(x float64) bool {
 	gp, err := BigHexToBigFloat(m.GasPrice)
 	if err != nil {
@@ -196,11 +196,11 @@ func (m *MemPoolTx) HasGasPriceMoreThan(x float64) bool {
 	}
 
 	given := big.NewFloat(x)
-	return gp.Cmp(given) == 1
+	return gp.Cmp(given) >= 0
 }
 
 // HasGasPriceLessThan - Returns true if gas price of this tx
-// is less than `X`
+// is less than or equals to `X`
 func (m *MemPoolTx) HasGasPriceLessThan(x float64) bool {
 	gp, err := BigHexToBigFloat(m.GasPrice)
 	if err != nil {
@@ -208,7 +208,7 @@ func (m *MemPoolTx) HasGasPriceLessThan(x float64) bool {
 	}
 
 	given := big.NewFloat(x)
-	return gp.Cmp(given) == -1
+	return gp.Cmp(given) <= 0
 }
 
 // ToMessagePack - Serialize to message pack encoded byte array format

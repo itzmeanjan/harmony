@@ -976,7 +976,7 @@ func (p *PendingPool) FresherThanX(x time.Duration) []*MemPoolTx {
 }
 
 // HigherThanX - Returns a list of pending txs which are paid with
-// gas price > `X`
+// gas price >= `X`
 func (p *PendingPool) HigherThanX(x float64) []*MemPoolTx {
 	txs := p.DescListTxs()
 	if txs == nil {
@@ -1002,7 +1002,7 @@ func (p *PendingPool) HigherThanX(x float64) []*MemPoolTx {
 }
 
 // LowerThanX - Returns a list of pending txs which are paid with
-// gas price < `X`
+// gas price <= `X`
 func (p *PendingPool) LowerThanX(x float64) []*MemPoolTx {
 	txs := p.AscListTxs()
 	if txs == nil {
