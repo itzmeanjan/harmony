@@ -195,7 +195,7 @@ func (m *MemPoolTx) HasGasPriceMoreThan(x float64) bool {
 		return false
 	}
 
-	given := big.NewFloat(x)
+	given := big.NewFloat(x * 1_000_000_000)
 	return gp.Cmp(given) >= 0
 }
 
@@ -207,7 +207,7 @@ func (m *MemPoolTx) HasGasPriceLessThan(x float64) bool {
 		return false
 	}
 
-	given := big.NewFloat(x)
+	given := big.NewFloat(x * 1_000_000_000)
 	return gp.Cmp(given) <= 0
 }
 
