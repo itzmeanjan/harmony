@@ -21,6 +21,8 @@ Reduce Chaos in MemPool 😌
 	- [Inspecting tx(s) in pending pool](#pending-pool)
 		- [Pending For >= `X`](#pending-for-more-than-X)
 		- [Pending For <= `X`](#pending-for-less-than-X)
+		- [Pending With >= `X` ( Gwei )](#pending-with-more-than-X)
+		- [Pending With <= `X` ( Gwei )](#pending-with-less-than-X)
 		- [Pending From Address `A`](#pending-from-A)
 		- [Pending To Address `A`](#pending-to-A)
 		- [Top `X` Pending Tx(s)](#top-X-pending)
@@ -37,6 +39,8 @@ Reduce Chaos in MemPool 😌
 	- [Inspecting tx(s) in queued pool](#queued-pool)
 		- [Queued For >= `X`](#queued-for-more-than-X)
 		- [Queued For <= `X`](#queued-for-less-than-X)
+		- [Queued With >= `X` ( Gwei )](#queued-with-more-than-X)
+		- [Queued With <= `X` ( Gwei )](#queued-with-less-than-X)
 		- [Queued From Address `A`](#queued-from-A)
 		- [Queued To Address `A`](#queued-to-A)
 		- [Top `X` Queued Tx(s)](#top-X-queued)
@@ -421,6 +425,48 @@ query {
   	pendingFor
   	queuedFor
   	pool
+  }
+}
+```
+
+---
+
+### Pending with more than `X`
+
+For listing all tx(s) pending with gas price >= `x` GWei, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  pendingWithMoreThan(x: 20.1) {
+	from
+	hash
+	gasPriceGwei
+  }
+}
+```
+
+---
+
+### Pending with less than `X`
+
+For listing all tx(s) pending with gas price <= `x` GWei, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  pendingWithLessThan(x: 10.1) {
+	from
+	hash
+	gasPriceGwei
   }
 }
 ```
@@ -833,6 +879,48 @@ query {
   	pendingFor
   	queuedFor
   	pool
+  }
+}
+```
+
+---
+
+### Queued with more than `X`
+
+For listing all tx(s) queued with gas price >= `x` GWei, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  queuedWithMoreThan(x: 20.1) {
+	from
+	hash
+	gasPriceGwei
+  }
+}
+```
+
+---
+
+### Queued with less than `X`
+
+For listing all tx(s) queued with gas price <= `x` GWei, send graphQL query
+
+Method : **POST**
+
+URL : **/v1/graphql**
+
+
+```graphql
+query {
+  queuedWithLessThan(x: 10.1) {
+	from
+	hash
+	gasPriceGwei
   }
 }
 ```
