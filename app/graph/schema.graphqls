@@ -37,6 +37,12 @@ type Query {
 
   pendingDuplicates(hash: String!): [MemPoolTx!]!
   queuedDuplicates(hash: String!): [MemPoolTx!]!
+
+  pendingWithMoreThan(x: Float!): [MemPoolTx!]!
+  pendingWithLessThan(x: Float!): [MemPoolTx!]!
+
+  queuedWithMoreThan(x: Float!): [MemPoolTx!]!
+  queuedWithLessThan(x: Float!): [MemPoolTx!]!
 }
 
 type Subscription {
