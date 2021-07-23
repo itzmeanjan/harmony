@@ -82,6 +82,9 @@ During my journey of exploring Ethereum MemPool, I found good initiative from [B
 
 - Make sure you've _`Go ( >= 1.16)`_, _`make`_ installed
 - Get one Ethereum Node up & running, with `txpool` RPC API enabled. You can always use SaaS Ethereum node.
+- For leveraging pub/sub functionality `harmony` expects to get access to `0hub` - a Pub/Sub Hub, which can be deployed by following [this](https://github.com/itzmeanjan/pub0sub#hub) guide
+
+> Note: You'll need to fill `0hub`'s host, port in .env file
 
 ## Installation
 
@@ -110,6 +113,8 @@ QueuedTxEntryTopic=queued_pool_entry
 QueuedTxExitTopic=queued_pool_exit
 ConcurrencyFactor=10
 Port=7000
+Pub0SubHost=127.0.0.1
+Pub0SubPort=13000
 ```
 
 Environment Variable | Interpretation
@@ -125,6 +130,8 @@ QueuedTxEntryTopic | Whenever tx enters queued pool, it'll be published on Pub/S
 QueuedTxExitTopic | Whenever tx leaves queued pool, it'll be published on Pub/Sub topic `t`
 ConcurrencyFactor | Whenever concurrency can be leveraged, `harmony` will create worker pool with `#-of logical CPUs x ConcurrencyFactor` go routines. **[ Can be float too ]**
 Port | Starts HTTP server on this port ( > 1024 )
+Pub0SubHost | Pub/Sub Hub i.e. `0hub` listening on address
+Pub0SubPort | Pub/Sub Hub i.e. `0hub` listening on port
 
 > Note : When pool size exceeds, tx with lowest gas price paid to be dropped. Consider setting pool sizes to higher values, if you've enough memory on machine, otherwise it'll crash.
 
