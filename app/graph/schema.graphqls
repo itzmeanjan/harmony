@@ -2,6 +2,7 @@ type MemPoolTx {
   from: String!
   gas: String!
   gasPrice: String!
+  gasPriceGwei: Float!
   hash: String!
   input: String!
   nonce: String!

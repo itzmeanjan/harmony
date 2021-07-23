@@ -159,3 +159,19 @@ func HumanReadableGasPrice(num *hexutil.Big) string {
 	return fmt.Sprintf("%s Gwei", _res.String())
 
 }
+
+// NumericGasPriceGwei - GasPrice in Gwei unit represented as
+// floating point ( double precision )
+func NumericGasPriceGwei(num *hexutil.Big) float64 {
+	_num, err := BigHexToBigFloat(num)
+	if err != nil {
+		return 0.0
+	}
+
+	_den := big.NewFloat(1_000_000_000)
+	_res := big.NewFloat(0)
+	_res.Quo(_num, _den)
+
+	gp, _ := _res.Float64()
+	return gp
+}

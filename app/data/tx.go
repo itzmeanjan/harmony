@@ -304,8 +304,10 @@ func (m *MemPoolTx) ToGraphQL() *model.MemPoolTx {
 
 	if m.GasPrice != nil {
 		gqlTx.GasPrice = HumanReadableGasPrice(m.GasPrice)
+		gqlTx.GasPriceGwei = NumericGasPriceGwei(m.GasPrice)
 	} else {
 		gqlTx.GasPrice = "0"
+		gqlTx.GasPriceGwei = 0.0
 	}
 
 	if m.Value != nil {

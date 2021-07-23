@@ -45,20 +45,21 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	MemPoolTx struct {
-		From       func(childComplexity int) int
-		Gas        func(childComplexity int) int
-		GasPrice   func(childComplexity int) int
-		Hash       func(childComplexity int) int
-		Input      func(childComplexity int) int
-		Nonce      func(childComplexity int) int
-		PendingFor func(childComplexity int) int
-		Pool       func(childComplexity int) int
-		QueuedFor  func(childComplexity int) int
-		R          func(childComplexity int) int
-		S          func(childComplexity int) int
-		To         func(childComplexity int) int
-		V          func(childComplexity int) int
-		Value      func(childComplexity int) int
+		From         func(childComplexity int) int
+		Gas          func(childComplexity int) int
+		GasPrice     func(childComplexity int) int
+		GasPriceGwei func(childComplexity int) int
+		Hash         func(childComplexity int) int
+		Input        func(childComplexity int) int
+		Nonce        func(childComplexity int) int
+		PendingFor   func(childComplexity int) int
+		Pool         func(childComplexity int) int
+		QueuedFor    func(childComplexity int) int
+		R            func(childComplexity int) int
+		S            func(childComplexity int) int
+		To           func(childComplexity int) int
+		V            func(childComplexity int) int
+		Value        func(childComplexity int) int
 	}
 
 	Query struct {
@@ -180,6 +181,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.MemPoolTx.GasPrice(childComplexity), true
+
+	case "MemPoolTx.gasPriceGwei":
+		if e.complexity.MemPoolTx.GasPriceGwei == nil {
+			break
+		}
+
+		return e.complexity.MemPoolTx.GasPriceGwei(childComplexity), true
 
 	case "MemPoolTx.hash":
 		if e.complexity.MemPoolTx.Hash == nil {
@@ -726,6 +734,7 @@ var sources = []*ast.Source{
   from: String!
   gas: String!
   gasPrice: String!
+  gasPriceGwei: Float!
   hash: String!
   input: String!
   nonce: String!
@@ -1395,6 +1404,41 @@ func (ec *executionContext) _MemPoolTx_gasPrice(ctx context.Context, field graph
 	res := resTmp.(string)
 	fc.Result = res
 	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _MemPoolTx_gasPriceGwei(ctx context.Context, field graphql.CollectedField, obj *model.MemPoolTx) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MemPoolTx",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.GasPriceGwei, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _MemPoolTx_hash(ctx context.Context, field graphql.CollectedField, obj *model.MemPoolTx) (ret graphql.Marshaler) {
@@ -4657,6 +4701,11 @@ func (ec *executionContext) _MemPoolTx(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "gasPriceGwei":
+			out.Values[i] = ec._MemPoolTx_gasPriceGwei(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		case "hash":
 			out.Values[i] = ec._MemPoolTx_hash(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -5263,6 +5312,21 @@ func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v interf
 
 func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
 	res := graphql.MarshalBoolean(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v interface{}) (float64, error) {
+	res, err := graphql.UnmarshalFloat(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
+	res := graphql.MarshalFloat(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "must not be null")
