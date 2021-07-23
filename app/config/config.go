@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"runtime"
@@ -228,4 +229,14 @@ func GetNetworkingChoice() bool {
 
 	return GetBool("NetworkingEnabled")
 
+}
+
+// Pub0Sub's 0hub server running on address
+// port, to be used for pub/sub message
+// passing purpose
+func GetPub0SubAddress() string {
+	host := Get("Pub0SubHost")
+	port := GetUint("Pub0SubPort")
+
+	return fmt.Sprintf("%s:%d", host, port)
 }

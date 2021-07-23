@@ -12,7 +12,8 @@ import (
 	"github.com/gammazero/workerpool"
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/listen"
-	"github.com/itzmeanjan/pubsub"
+	"github.com/itzmeanjan/pub0sub/ops"
+	"github.com/itzmeanjan/pub0sub/publisher"
 )
 
 // PendingPool - Currently present pending tx(s) i.e. which are ready to
@@ -40,7 +41,7 @@ type PendingPool struct {
 	DoneChan                 chan chan uint64
 	SetLastSeenBlockChan     chan uint64
 	LastSeenBlockChan        chan chan LastSeenBlock
-	PubSub                   *pubsub.PubSub
+	PubSub                   *publisher.Publisher
 	RPC                      *rpc.Client
 }
 
@@ -1024,16 +1025,18 @@ func (p *PendingPool) VerifiedAdd(ctx context.Context, tx *MemPoolTx) bool {
 // to pubsub topic
 func (p *PendingPool) PublishAdded(ctx context.Context, msg *MemPoolTx) {
 
-	_msg, err := msg.ToMessagePack()
+	data, err := msg.ToMessagePack()
 	if err != nil {
 		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
 		return
 	}
 
-	p.PubSub.Publish(&pubsub.Message{
+	if _, err := p.PubSub.Publish(&ops.Msg{
 		Topics: []string{config.GetPendingTxEntryPublishTopic()},
-		Data:   _msg,
-	})
+		Data:   data,
+	}); err != nil {
+		log.Printf("[❗️] Failed to publish tx joining pending pool : %s\n", err.Error())
+	}
 
 }
 
@@ -1054,16 +1057,18 @@ func (p *PendingPool) Remove(ctx context.Context, txStat *TxStatus) bool {
 // These tx(s) are leaving pending pool i.e. they're confirmed now
 func (p *PendingPool) PublishRemoved(ctx context.Context, msg *MemPoolTx) {
 
-	_msg, err := msg.ToMessagePack()
+	data, err := msg.ToMessagePack()
 	if err != nil {
 		log.Printf("[❗️] Failed to serialize into messagepack : %s\n", err.Error())
 		return
 	}
 
-	p.PubSub.Publish(&pubsub.Message{
+	if _, err := p.PubSub.Publish(&ops.Msg{
 		Topics: []string{config.GetPendingTxExitPublishTopic()},
-		Data:   _msg,
-	})
+		Data:   data,
+	}); err != nil {
+		log.Printf("[❗️] Failed to publish tx leaving pending pool : %s\n", err.Error())
+	}
 
 }
 

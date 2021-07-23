@@ -10,36 +10,22 @@ import (
 	"github.com/itzmeanjan/harmony/app/config"
 	"github.com/itzmeanjan/harmony/app/data"
 	"github.com/itzmeanjan/harmony/app/graph/model"
-	"github.com/itzmeanjan/pubsub"
+	"github.com/itzmeanjan/pub0sub/ops"
+	"github.com/itzmeanjan/pub0sub/subscriber"
 )
 
 var memPool *data.MemPool
-var pubsubHub *pubsub.PubSub
 var parentCtx context.Context
 
 // InitMemPool - Initializing mempool handle, in this module
 // so that it can be used before responding back to graphql queries
 func InitMemPool(pool *data.MemPool) error {
-
 	if pool != nil {
 		memPool = pool
 		return nil
 	}
 
 	return errors.New("bad mempool received in graphQL handler")
-
-}
-
-// InitPubSub - Initializing pubsub handle, for managing subscriptions
-func InitPubSub(client *pubsub.PubSub) error {
-
-	if client != nil {
-		pubsubHub = client
-		return nil
-	}
-
-	return errors.New("bad pub/sub received in graphQL handler")
-
 }
 
 // InitParentContext - Initializing parent context, to be listened by all
@@ -108,25 +94,21 @@ func checkHash(hash string) bool {
 // SubscribeToTopic - Subscribes to PubSub topic(s), while configuring subscription such
 // that at max 256 messages can be kept in buffer at a time. If client is consuming slowly
 // buffer size will be extended.
-func SubscribeToTopic(ctx context.Context, topic ...string) (*pubsub.Subscriber, error) {
-
-	_sub := pubsubHub.Subscribe(256, topic...)
-	if _sub == nil {
+func SubscribeToTopic(ctx context.Context, topic ...string) (*subscriber.Subscriber, error) {
+	subscriber, err := subscriber.New(ctx, "tcp", config.GetPub0SubAddress(), 64, topic...)
+	if err != nil {
 		return nil, errors.New("topic subscription failed")
 	}
 
-	return _sub, nil
-
+	return subscriber, nil
 }
 
 // SubscribeToPendingPool - Subscribes to both topics, associated with changes
 // happening in pending tx pool
 //
 // When tx joins/ leaves pending pool, subscribers will receive notification
-func SubscribeToPendingPool(ctx context.Context) (*pubsub.Subscriber, error) {
-
+func SubscribeToPendingPool(ctx context.Context) (*subscriber.Subscriber, error) {
 	return SubscribeToTopic(ctx, config.GetPendingTxEntryPublishTopic(), config.GetPendingTxExitPublishTopic())
-
 }
 
 // SubscribeToQueuedPool - Subscribes to both topics, associated with changes
@@ -136,10 +118,8 @@ func SubscribeToPendingPool(ctx context.Context) (*pubsub.Subscriber, error) {
 //
 // @note Tx(s) generally join queued pool, when there's nonce gap & this tx can't be
 // processed until some lower nonce tx(s) get(s) processed
-func SubscribeToQueuedPool(ctx context.Context) (*pubsub.Subscriber, error) {
-
+func SubscribeToQueuedPool(ctx context.Context) (*subscriber.Subscriber, error) {
 	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic(), config.GetQueuedTxExitPublishTopic())
-
 }
 
 // SubscribeToMemPool - Subscribes to any changes happening in mempool
@@ -150,46 +130,36 @@ func SubscribeToQueuedPool(ctx context.Context) (*pubsub.Subscriber, error) {
 //
 // It'll subscribe to all 4 topics for listening
 // to tx(s) entering/ leaving any portion of mempool
-func SubscribeToMemPool(ctx context.Context) (*pubsub.Subscriber, error) {
-
+func SubscribeToMemPool(ctx context.Context) (*subscriber.Subscriber, error) {
 	return SubscribeToTopic(ctx,
 		config.GetQueuedTxEntryPublishTopic(),
 		config.GetQueuedTxExitPublishTopic(),
 		config.GetPendingTxEntryPublishTopic(),
 		config.GetPendingTxExitPublishTopic())
-
 }
 
 // SubscribeToPendingTxEntry - Subscribe to topic where new pending tx(s)
 // are published
-func SubscribeToPendingTxEntry(ctx context.Context) (*pubsub.Subscriber, error) {
-
+func SubscribeToPendingTxEntry(ctx context.Context) (*subscriber.Subscriber, error) {
 	return SubscribeToTopic(ctx, config.GetPendingTxEntryPublishTopic())
-
 }
 
 // SubscribeToQueuedTxEntry - Subscribe to topic where new queued tx(s)
 // are published
-func SubscribeToQueuedTxEntry(ctx context.Context) (*pubsub.Subscriber, error) {
-
+func SubscribeToQueuedTxEntry(ctx context.Context) (*subscriber.Subscriber, error) {
 	return SubscribeToTopic(ctx, config.GetQueuedTxEntryPublishTopic())
-
 }
 
 // SubscribeToPendingTxExit - Subscribe to topic where pending tx(s), getting
 // confirmed are published
-func SubscribeToPendingTxExit(ctx context.Context) (*pubsub.Subscriber, error) {
-
+func SubscribeToPendingTxExit(ctx context.Context) (*subscriber.Subscriber, error) {
 	return SubscribeToTopic(ctx, config.GetPendingTxExitPublishTopic())
-
 }
 
 // SubscribeToQueuedTxExit - Subscribe to topic where queued tx(s), getting
 // unstuck are published
-func SubscribeToQueuedTxExit(ctx context.Context) (*pubsub.Subscriber, error) {
-
+func SubscribeToQueuedTxExit(ctx context.Context) (*subscriber.Subscriber, error) {
 	return SubscribeToTopic(ctx, config.GetQueuedTxExitPublishTopic())
-
 }
 
 // ListenToMessages - Attempts to listen to messages being published
@@ -203,13 +173,16 @@ func SubscribeToQueuedTxExit(ctx context.Context) (*pubsub.Subscriber, error) {
 //
 // You can always blindly return `true` in your `evaluationCriteria` function,
 // so that you get to receive any tx being published on topic of your interest
-func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
+func ListenToMessages(ctx context.Context, subscriber *subscriber.Subscriber, comm chan<- *model.MemPoolTx, pubCriteria PublishingCriteria, params ...interface{}) {
 
 	defer func() {
+		if err := subscriber.Disconnect(); err != nil {
+			log.Printf("[❗️] Failed to destroy subscriber : %s\n", err.Error())
+		}
 		close(comm)
 	}()
 
-	consume := func(msg *pubsub.PublishedMessage) {
+	consume := func(msg *ops.PushedMessage) {
 		unmarshalled := UnmarshalPubSubMessage(msg.Data)
 		if unmarshalled == nil || !pubCriteria(unmarshalled, params...) {
 			return
@@ -250,7 +223,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm c
 				subscriber.UnsubscribeAll()
 				break OUTER
 
-			case <-subscriber.Listener():
+			case <-subscriber.Watch():
 				// Listening for message availablity
 				// signal
 				received := subscriber.Next()
@@ -261,7 +234,7 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm c
 
 			case <-time.After(duration):
 
-				if !subscriber.Consumable() {
+				if !subscriber.Queued() {
 					break
 				}
 
@@ -278,11 +251,6 @@ func ListenToMessages(ctx context.Context, subscriber *pubsub.Subscriber, comm c
 		}
 	}
 
-}
-
-// UnsubscribeFromTopic - Unsubscribes subscriber from all topics
-func UnsubscribeFromTopic(ctx context.Context, subscriber *pubsub.Subscriber) {
-	subscriber.UnsubscribeAll()
 }
 
 // UnmarshalPubSubMessage - Attempts to unmarshal message pack serialized

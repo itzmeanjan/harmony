@@ -5,7 +5,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/itzmeanjan/pubsub"
 )
 
 // Resource - Shared resources among multiple go routines
@@ -15,7 +14,6 @@ type Resource struct {
 	RPCClient *rpc.Client
 	WSClient  *ethclient.Client
 	Pool      *MemPool
-	PubSub    *pubsub.PubSub
 	StartedAt time.Time
 	NetworkID uint64
 }
