@@ -102,6 +102,26 @@ func (m *MemPool) QueuedForLTE(x time.Duration) []*MemPoolTx {
 	return m.Queued.FresherThanX(x)
 }
 
+// PendingWithGTE - Returns list of tx(s), pending with gas price >= `X`
+func (m *MemPool) PendingWithGTE(x float64) []*MemPoolTx {
+	return m.Pending.HigherThanX(x)
+}
+
+// PendingWithLTE - Returns list of tx(s), pending with gas price <= `X`
+func (m *MemPool) PendingWithLTE(x float64) []*MemPoolTx {
+	return m.Pending.LowerThanX(x)
+}
+
+// QueuedWithGTE - Returns list of tx(s), queued with gas price >= `X`
+func (m *MemPool) QueuedWithGTE(x float64) []*MemPoolTx {
+	return m.Queued.HigherThanX(x)
+}
+
+// QueuedWithLTE - Returns list of tx(s), queued with gas price <= `X`
+func (m *MemPool) QueuedWithLTE(x float64) []*MemPoolTx {
+	return m.Queued.LowerThanX(x)
+}
+
 // PendingFrom - List of tx(s) pending from address
 //
 // @note These are going to be same nonce tx(s), only one of them will

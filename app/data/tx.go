@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -184,6 +185,30 @@ func (m *MemPoolTx) IsUnstuck(ctx context.Context, rpc *rpc.Client) (bool, error
 
 	return m.Nonce <= result, nil
 
+}
+
+// HasGasPriceMoreThan - Returns true if gas price of this tx
+// is more than or equals to `X`
+func (m *MemPoolTx) HasGasPriceMoreThan(x float64) bool {
+	gp, err := BigHexToBigFloat(m.GasPrice)
+	if err != nil {
+		return false
+	}
+
+	given := big.NewFloat(x * 1_000_000_000)
+	return gp.Cmp(given) >= 0
+}
+
+// HasGasPriceLessThan - Returns true if gas price of this tx
+// is less than or equals to `X`
+func (m *MemPoolTx) HasGasPriceLessThan(x float64) bool {
+	gp, err := BigHexToBigFloat(m.GasPrice)
+	if err != nil {
+		return false
+	}
+
+	given := big.NewFloat(x * 1_000_000_000)
+	return gp.Cmp(given) <= 0
 }
 
 // ToMessagePack - Serialize to message pack encoded byte array format

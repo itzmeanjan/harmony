@@ -128,6 +128,38 @@ func (r *queryResolver) QueuedDuplicates(ctx context.Context, hash string) ([]*m
 	return toGraphQL(memPool.QueuedDuplicates(common.HexToHash(hash))), nil
 }
 
+func (r *queryResolver) PendingWithMoreThan(ctx context.Context, x float64) ([]*model.MemPoolTx, error) {
+	if !(x >= 0) {
+		return nil, errors.New("bad gas price ( in Gwei )")
+	}
+
+	return toGraphQL(memPool.PendingWithGTE(x)), nil
+}
+
+func (r *queryResolver) PendingWithLessThan(ctx context.Context, x float64) ([]*model.MemPoolTx, error) {
+	if !(x >= 0) {
+		return nil, errors.New("bad gas price ( in Gwei )")
+	}
+
+	return toGraphQL(memPool.PendingWithLTE(x)), nil
+}
+
+func (r *queryResolver) QueuedWithMoreThan(ctx context.Context, x float64) ([]*model.MemPoolTx, error) {
+	if !(x >= 0) {
+		return nil, errors.New("bad gas price ( in Gwei )")
+	}
+
+	return toGraphQL(memPool.QueuedWithGTE(x)), nil
+}
+
+func (r *queryResolver) QueuedWithLessThan(ctx context.Context, x float64) ([]*model.MemPoolTx, error) {
+	if !(x >= 0) {
+		return nil, errors.New("bad gas price ( in Gwei )")
+	}
+
+	return toGraphQL(memPool.QueuedWithLTE(x)), nil
+}
+
 func (r *subscriptionResolver) NewPendingTx(ctx context.Context) (<-chan *model.MemPoolTx, error) {
 	_pubsub, err := SubscribeToPendingTxEntry(ctx)
 	if err != nil {
